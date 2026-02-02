@@ -2,36 +2,13 @@
 
 @theme {
   --color-primary: #D4AF37;
-  --color-accent: #FFD700;
-  --color-background: #0a0a0c;
-  --color-surface: #121216;
+  --color-accent: #E5C558;
+  --color-background: #050505;
+  --color-surface: #0A0A0A;
   --color-text: #F5F5F5;
   
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  
-  --animate-fade-in-up: fadeInUp 0.8s ease-out forwards;
-  --animate-glow: glow 2s ease-in-out infinite alternate;
-  
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @keyframes glow {
-    from {
-      box-shadow: 0 0 10px -5px #D4AF37;
-    }
-    to {
-      box-shadow: 0 0 25px 5px #D4AF3740;
-    }
-  }
 }
 
 :root {
@@ -40,7 +17,10 @@
 }
 
 body {
-  background: radial-gradient(circle at 50% 0%, #1e1e24 0%, #0a0a0c 100%);
+  background: #050505;
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(212, 175, 55, 0.03), transparent 25%), 
+    radial-gradient(circle at 85% 30%, rgba(255, 255, 255, 0.02), transparent 25%);
   color: var(--foreground);
   font-family: var(--font-sans);
   min-height: 100vh;

@@ -10,16 +10,16 @@ export type Profile = {
 export type BucketStatus = 'DRAFT' | 'ACTIVE' | 'ACHIEVED'
 export type BucketCategory = 'TRAVEL' | 'GROWTH' | 'CAREER' | 'Relationship' | 'FOOD' | 'OTHER'
 
-export type Bucket = {
+export interface Bucket {
   id: string
   user_id: string
   title: string
   description: string | null
-  category: BucketCategory
-  status: BucketStatus
+  category: string
+  status: 'DRAFT' | 'ACTIVE' | 'ACHIEVED'
   is_pinned: boolean
-  target_date: string | null
   importance: number
+  tags: string[] | null
   created_at: string
   updated_at: string
 }

@@ -1,102 +1,90 @@
 'use client'
 
-import { createBucket } from '../actions' // Import from parent actions if strictly shared, or local
-// Note: In Next.js App Router, it's common to keep actions next to the page or in a shared actions file.
-// I'll assume we import from the file I just created in src/app/archive/actions.ts
-
+import { createBucket } from '../actions'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { TagInput } from '@/components/ui/TagInput'
+import { useState } from 'react'
+import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 
-// We need to import the server action. 
-// Since createBucket is defined in src/app/archive/actions.ts, let's verify the import path.
-// The file is D:\dev\epoch-film\src\app\archive\actions.ts. 
-// So from D:\dev\epoch-film\src\app\archive\new\page.tsx it would be '../actions'
-import { createBucket as createBucketAction } from '../actions'
-
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button 
+      type="submit" 
+      disabled={pending} 
+      className="w-full h-14 rounded-full bg-primary text-black hover:bg-primary/90 font-medium text-lg shadow-[0_4px_20px_-5px_rgba(212,175,55,0.4)] transition-all"
+    >
+      {pending ? 'Creating...' : 'Create Reel'}
+    </Button>
+  )
+}
 
 export default function NewBucketPage() {
+  const [tags, setTags] = useState<string[]>([])
+  const categories = ['TRAVEL', 'GROWTH', 'CAREER', 'Relationship', 'FOOD', 'OTHER']
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
-      <div className="w-full max-w-lg rounded-lg border border-white/10 bg-surface p-8 shadow-xl">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-white">New Reel</h1>
-          <p className="text-sm text-gray-400">Define a new scene for your epoch.</p>
+    <div className="min-h-screen bg-background p-6 flex flex-col items-center justify-center">
+      <div className="w-full max-w-lg space-y-8 animate-fade-in-up">
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold text-white tracking-tight">New Reel</h1>
+          <p className="text-white/40 font-light">Capture a new dream for your archive.</p>
         </div>
 
-        <form action={createBucketAction} className="space-y-6">
+        <form action={createBucket} className="space-y-6">
           <div className="space-y-4">
             <div>
-              <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-gray-300">
-                Title <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id="title"
-                name="title"
-                placeholder="e.g. Watch the sunset in Santorini"
-                required
-                autoFocus
+              <label className="block text-sm font-medium text-white/50 mb-1.5 ml-1">Title</label>
+              <Input 
+                name="title" 
+                required 
+                placeholder="e.g. Learn to Surf in Bali" 
+                className="bg-white/[0.03] border-white/10 h-12 rounded-xl text-white placeholder:text-white/20 focus:border-primary/50" 
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="category" className="mb-1.5 block text-sm font-medium text-gray-300">
-                  Category
-                </label>
-                <select
-                  id="category"
-                  name="category"
-                  className="flex h-10 w-full rounded-md border border-white/20 bg-surface px-3 py-2 text-sm text-text ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            <div>
+              <label className="block text-sm font-medium text-white/50 mb-1.5 ml-1">Category</label>
+              <div className="relative">
+                <select 
+                  name="category" 
+                  className="w-full h-12 bg-white/[0.03] border border-white/10 text-white focus:border-primary/50 focus:ring-0 rounded-xl px-4 text-sm appearance-none cursor-pointer"
                 >
-                  <option value="TRAVEL">Travel</option>
-                  <option value="GROWTH">Growth</option>
-                  <option value="CAREER">Career</option>
-                  <option value="FOOD">Food</option>
-                  <option value="RELATIONSHIP">Relationship</option>
-                  <option value="OTHER">Other</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat} className="bg-[#1A1A20]">{cat}</option>
+                  ))}
                 </select>
-              </div>
-              
-              <div>
-                <label htmlFor="importance" className="mb-1.5 block text-sm font-medium text-gray-300">
-                  Importance (1-5)
-                </label>
-                <Input
-                  id="importance"
-                  name="importance"
-                  type="number"
-                  min="1"
-                  max="5"
-                  defaultValue="3"
-                  required
-                />
+                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-white/30">
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
+                </div>
               </div>
             </div>
 
             <div>
-              <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-gray-300">
-                Description
-              </label>
+              <label className="block text-sm font-medium text-white/50 mb-1.5 ml-1">Description</label>
               <textarea
-                id="description"
                 name="description"
-                rows={4}
-                className="flex w-full rounded-md border border-white/20 bg-surface px-3 py-2 text-sm text-text ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                placeholder="Add details about this goal..."
+                rows={3}
+                placeholder="Details about your dream..."
+                className="w-full bg-white/[0.03] border border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:bg-white/[0.05] focus:ring-0 transition-all rounded-xl px-4 py-3 text-sm resize-none outline-none"
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-white/50 mb-1.5 ml-1">Tags</label>
+              <TagInput tags={tags} setTags={setTags} />
+            </div>
+            
+            <input type="hidden" name="importance" value="3" />
           </div>
 
-          <div className="flex gap-4 pt-2">
-            <Link href="/archive" className="w-full">
-              <Button type="button" variant="outline" className="w-full">
-                Cancel
-              </Button>
+          <div className="pt-2 space-y-4">
+            <SubmitButton />
+            <Link href="/archive" className="block text-center text-sm text-white/30 hover:text-white transition-colors">
+              Cancel
             </Link>
-            <Button type="submit" className="w-full">
-              Create Reel
-            </Button>
           </div>
         </form>
       </div>
