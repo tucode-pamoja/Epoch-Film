@@ -1,0 +1,21 @@
+{
+    "name": "Epoch Film",
+    "short_name": "Epoch Film",
+    "description": "당신의 꿈을 한 편의 영화처럼 기록하세요.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#050505",
+    "theme_color": "#050505",
+    "icons": [
+        {
+            "src": "/logo.jpg",
+            "sizes": "192x192",
+            "type": "image/jpeg"
+        },
+        {
+            "src": "/logo.jpg",
+            "sizes": "512x512",
+            "type": "image/jpeg"
+        }
+    ]
+}

@@ -6,16 +6,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {}
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> { }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, ...props }, ref) => {
     return (
       <input
         type={type}
-        className={cn(
-          'flex h-10 w-full rounded-md border border-white/20 bg-surface px-3 py-2 text-sm text-text ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-          className
+        className={twMerge(
+          clsx(
+            'flex h-11 w-full rounded-sm border border-white/10 bg-darkroom/50 px-4 py-2 text-sm text-celluloid ring-offset-void file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-smoke focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-film transition-all focus:border-gold-film/50',
+            className
+          )
         )}
         ref={ref}
         {...props}

@@ -10,18 +10,18 @@ export function LetterAction({ bucketId }: { bucketId: string }) {
 
   return (
     <>
-      <Button 
+      <Button
         onClick={() => setIsEditorOpen(true)}
-        className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-white/5 text-whitehover:bg-white/10 border border-white/10 hover:border-white/20 transition-all font-normal text-sm"
+        className="w-full flex items-center justify-center gap-2 h-12 rounded-sm bg-velvet text-smoke hover:bg-white/5 hover:text-gold-film border border-white/5 hover:border-gold-film/30 transition-all font-mono-technical uppercase tracking-widest text-[10px] whitespace-nowrap"
       >
-        <Mail size={16} />
-        Write a Letter to Future
+        <Mail size={14} className="mr-1" />
+        미래로 편지 보내기 (Write Letter)
       </Button>
 
-      <LetterEditor 
-        bucketId={bucketId} 
-        isOpen={isEditorOpen} 
-        onClose={() => setIsEditorOpen(false)} 
+      <LetterEditor
+        bucketId={bucketId}
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
       />
     </>
   )

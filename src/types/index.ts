@@ -20,6 +20,11 @@ export interface Bucket {
   is_pinned: boolean
   importance: number
   tags: string[] | null
+  achieved: boolean
+  achieved_at: string | null
+  target_date: string | null
+  roadmap: any | null
+  thumbnail_url: string | null
   created_at: string
   updated_at: string
 }

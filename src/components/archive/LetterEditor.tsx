@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, X, Calendar, Send } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -46,78 +47,88 @@ export function LetterEditor({ bucketId, isOpen, onClose }: LetterEditorProps) {
     }
   }
 
-  return (
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div style={{ width: '100vw', height: '100vh', zIndex: 20000 }} className="fixed inset-0 flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/90 backdrop-blur-md"
           />
-          
+
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-[#0A0A0A] border border-white/10 shadow-2xl p-8"
+            style={{ width: '100%', maxWidth: '500px' }}
+            className="relative overflow-hidden rounded-sm bg-velvet border border-white/10 shadow-2xl p-6 film-border"
           >
-            <button 
+            <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-2 text-white/30 hover:text-white transition-colors"
+              className="absolute top-4 right-4 p-2 text-smoke hover:text-gold-film transition-colors"
             >
               <X size={20} />
             </button>
 
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 rounded-full bg-primary/10 text-primary">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="p-3 rounded-sm bg-gold-film/10 text-gold-film border border-gold-film/20">
                 <Mail size={24} />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Letter to Future Self</h2>
-                <p className="text-sm text-white/40">This letter will be locked until the date you choose.</p>
+                <h2 className="text-xl font-display text-celluloid">미래의 나에게 (To Future Me)</h2>
+                <p className="text-[10px] font-mono-technical text-smoke uppercase tracking-wider">이 편지는 지정된 날짜까지 봉인됩니다.</p>
               </div>
             </div>
 
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-white/50 mb-2 flex items-center gap-2">
-                  <Calendar size={14} />
-                  Open Date
+                <label className="block text-[10px] font-mono-technical text-smoke uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <Calendar size={12} />
+                  개봉 날짜 (Open Date)
                 </label>
-                <Input 
-                  type="date" 
-                  value={openDate} 
+                <Input
+                  type="date"
+                  value={openDate}
                   onChange={(e) => setOpenDate(e.target.value)}
-                  className="bg-white/[0.03] border-white/10 text-white h-12 rounded-xl"
+                  className="bg-white/5 border-white/10 text-celluloid h-12 rounded-sm font-mono-technical text-sm glass-warm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white/50 mb-2">Message</label>
+                <label className="block text-[10px] font-mono-technical text-smoke uppercase tracking-widest mb-2">메시지 (Message)</label>
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Dear future me..."
+                  placeholder="미래의 나에게 전하고 싶은 이야기를 적어보세요..."
                   rows={6}
-                  className="w-full bg-white/[0.03] border border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:bg-white/[0.05] focus:ring-0 transition-all rounded-xl px-4 py-3 text-sm resize-none outline-none leading-relaxed"
+                  className="w-full bg-white/5 border border-white/10 text-celluloid placeholder:text-smoke/30 focus:border-gold-film/50 focus:bg-white/5 focus:ring-0 transition-all rounded-sm px-4 py-3 text-sm resize-none outline-none leading-relaxed glass-warm font-light"
                 />
               </div>
 
-              <Button 
-                onClick={handleSubmit} 
+              <Button
+                onClick={handleSubmit}
                 disabled={isSending}
-                className="w-full h-14 rounded-full bg-primary text-black hover:bg-primary/90 font-medium text-lg flex items-center justify-center gap-2"
+                className="w-full h-14 rounded-sm bg-gold-film text-velvet hover:bg-gold-highlight hover:text-black font-display text-lg flex items-center justify-center gap-2 transition-all shadow-warm"
               >
-                {isSending ? 'Sealing...' : 'Seal in Time Capsule'}
+                {isSending ? '봉인 중...' : '타임 캡슐 봉인하기 (SEAL CAPSULE)'}
                 {!isSending && <Send size={18} />}
               </Button>
             </div>
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

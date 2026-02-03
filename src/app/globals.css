@@ -1,29 +1,345 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #D4AF37;
-  --color-accent: #E5C558;
-  --color-background: #050505;
-  --color-surface: #0A0A0A;
-  --color-text: #F5F5F5;
-  
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Colors - Warm Cinematic Palette (Vintage Adjusted) */
+  --color-gold-film: #C9A227;
+  --color-gold-warm: #E8D5A3;
+  --color-gold-highlight: #FFE55C;
+
+  --color-void: #0A0908;
+  /* Slightly deeper, cooler */
+  --color-darkroom: #141210;
+  --color-velvet: #1C1A18;
+
+  --color-cyan-film: #4ECDC4;
+  --color-orange-film: #FF6B35;
+  --color-purple-dusk: #7B68EE;
+
+  --color-silver-screen: #C0C0C0;
+  --color-celluloid: #F7F2E9;
+  /* Warmer cream */
+  --color-smoke: #5C5552;
+
+  /* Typography - Sentimental Vintage (Neo-Classic) */
+  --font-display: "Gowun Batang", serif;
+  --font-body: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Spacing (8px grid) */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+  --spacing-2xl: 4rem;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-warm: 0 4px 20px rgba(201, 162, 39, 0.1);
+  --shadow-deep: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 :root {
-  --background: var(--color-background);
-  --foreground: var(--color-text);
+  --background: var(--color-void);
+  --foreground: var(--color-celluloid);
+  --primary: var(--color-gold-film);
 }
 
 body {
-  background: #050505;
-  background-image: 
-    radial-gradient(circle at 15% 50%, rgba(212, 175, 55, 0.03), transparent 25%), 
-    radial-gradient(circle at 85% 30%, rgba(255, 255, 255, 0.02), transparent 25%);
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   min-height: 100vh;
   margin: 0;
   -webkit-font-smoothing: antialiased;
+
+  /* Film grain texture and cinematic gradients */
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(201, 162, 39, 0.05), transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(78, 205, 196, 0.03), transparent 50%);
+  width: 100%;
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+/* Base Headings - Sentimental Feel */
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+h1 {
+  font-weight: 800;
+}
+
+/* Selection */
+::selection {
+  background: rgba(201, 162, 39, 0.4);
+  color: var(--color-celluloid);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-darkroom);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-smoke);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gold-film);
+}
+
+/* Focus states */
+:focus-visible {
+  outline: 2px solid var(--color-gold-film);
+  outline-offset: 2px;
+}
+
+/* Film Grain & Vintage Effects */
+.film-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.03;
+  background-image: url('https://www.transparenttextures.com/patterns/graphy-dark.png');
+  animation: grain 8s steps(10) infinite;
+  mix-blend-mode: overlay;
+}
+
+.vintage-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: rgba(201, 162, 39, 0.03);
+  /* Subtle Sepia */
+  mix-blend-mode: soft-light;
+}
+
+@keyframes grain {
+
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  10% {
+    transform: translate(-5%, -5%);
+  }
+
+  20% {
+    transform: translate(-10%, 5%);
+  }
+
+  30% {
+    transform: translate(5%, -10%);
+  }
+
+  40% {
+    transform: translate(-5%, 15%);
+  }
+
+  50% {
+    transform: translate(-10%, -5%);
+  }
+
+  60% {
+    transform: translate(15%, 0);
+  }
+
+  70% {
+    transform: translate(0, 10%);
+  }
+
+  80% {
+    transform: translate(-15%, 0);
+  }
+
+  90% {
+    transform: translate(10%, 10%);
+  }
+}
+
+/* Utility classes */
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--color-gold-warm) 0%, var(--color-gold-film) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-warm {
+  background: rgba(28, 26, 24, 0.4);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-film {
+  background: rgba(35, 31, 29, 0.4);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.perspective-cinema {
+  perspective: 1200px;
+}
+
+.film-border {
+  position: relative;
+}
+
+/* Sprocket hole simulation for film theme */
+.film-border::before,
+.film-border::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: repeating-linear-gradient(90deg,
+      var(--color-void) 0px,
+      var(--color-void) 8px,
+      transparent 8px,
+      transparent 16px);
+  z-index: 5;
+}
+
+.film-border::before {
+  top: 0;
+}
+
+.film-border::after {
+  bottom: 0;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: radial-gradient(ellipse at center,
+      transparent 0%,
+      transparent 50%,
+      rgba(10, 9, 8, 0.6) 100%);
+}
+
+.aspect-cinematic {
+  aspect-ratio: 2.35 / 1;
+}
+
+.font-mono-technical {
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+.light-leak {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0;
+  background: radial-gradient(circle at 20% 30%, rgba(255, 120, 50, 0.1), transparent 60%);
+  animation: leak 25s infinite;
+}
+
+@keyframes leak {
+
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.15;
+  }
+
+  17% {
+    opacity: 0.05;
+  }
+
+  18% {
+    opacity: 0.2;
+  }
+
+  20% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0;
+  }
+
+  75% {
+    opacity: 0.1;
+  }
+
+  77% {
+    opacity: 0;
+  }
+}
+
+.dust-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9997;
+  overflow: hidden;
+}
+
+.dust-particle {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  opacity: 0.1;
+  pointer-events: none;
+  animation: float linear infinite;
+}
+
+@keyframes float {
+  from {
+    transform: translateY(100vh) translateX(0);
+  }
+
+  to {
+    transform: translateY(-10vh) translateX(20px);
+  }
 }

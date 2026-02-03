@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import { Sparkles, CheckCircle2, Circle, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { generateRoadmap } from '@/app/archive/actions'
 import { motion } from 'framer-motion'
@@ -51,23 +51,23 @@ export function RoadmapView({ bucketId, roadmap }: RoadmapViewProps) {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5">
           <Sparkles className="h-8 w-8 text-purple-400" />
         </div>
-        <h3 className="mb-2 text-xl font-bold text-white">AI Director</h3>
+        <h3 className="mb-2 text-xl font-bold text-white">AI 연출가 (AI Director)</h3>
         <p className="mb-6 text-white/40">
-          Get a personalized roadmap to achieve this dream, <br />
-          including steps, costs, and timeline.
+          당신의 꿈을 실현하기 위한 맞춤형 로드맵을 받아보세요. <br />
+          단계별 계획, 예상 비용, 소요 시간을 제안해 드립니다.
         </p>
-        <Button 
-          onClick={handleGenerate} 
+        <Button
+          onClick={handleGenerate}
           disabled={isGenerating}
           className="h-12 rounded-full bg-white text-black hover:bg-white/90 px-8 font-medium shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)]"
         >
           {isGenerating ? (
             <span className="flex items-center gap-2">
               <Loader2 className="animate-spin" size={18} />
-              Consulting Director...
+              연출가와 상의 중... (Consulting)
             </span>
           ) : (
-            'Generate Plan with AI'
+            'AI 시나리오 생성하기 (Generate Plan)'
           )}
         </Button>
       </div>
@@ -82,34 +82,44 @@ export function RoadmapView({ bucketId, roadmap }: RoadmapViewProps) {
             <Sparkles size={20} />
           </div>
           <div>
-            <h3 className="font-bold text-white">Director's Cut</h3>
-            <p className="text-xs text-white/40">AI Generated Roadmap</p>
+            <h3 className="font-bold text-white">감독의 컷 (Director's Cut)</h3>
+            <p className="text-xs text-white/40">AI가 생성한 제작 계획</p>
           </div>
         </div>
-        <div className="flex gap-4 text-right">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-white/30">Est. Cost</p>
+        <div className="flex items-center gap-6 text-right">
+          <div className="hidden sm:block">
+            <p className="text-[10px] uppercase tracking-wider text-white/30">예상 비용 (Est. Cost)</p>
             <p className="font-mono text-sm text-primary">{roadmap.estimated_cost}</p>
           </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-white/30">Timeline</p>
+          <div className="hidden sm:block">
+            <p className="text-[10px] uppercase tracking-wider text-white/30">소요 시간 (Timeline)</p>
             <p className="font-mono text-sm text-blue-400">{roadmap.timeline}</p>
           </div>
+          <Button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            variant="ghost"
+            size="sm"
+            className="text-white/40 hover:text-white hover:bg-white/10 w-8 h-8 p-0"
+            title="다시 생성하기"
+          >
+            <RefreshCw size={16} className={isGenerating ? "animate-spin" : ""} />
+          </Button>
         </div>
       </div>
 
       <div className="space-y-8 pl-2">
         {roadmap.steps.map((step, index) => (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
-            key={step.step} 
+            key={step.step}
             className="relative border-l border-white/10 pl-8 last:border-0"
           >
             <div className="absolute left-[-5px] top-0 h-2.5 w-2.5 rounded-full bg-purple-500 ring-4 ring-[#050505]" />
             <h4 className="mb-1 text-sm font-bold text-white/90">
-              Step {step.step}: {step.title}
+              Scene {step.step}: {step.title}
             </h4>
             <p className="text-sm leading-relaxed text-white/50">{step.description}</p>
           </motion.div>
@@ -120,7 +130,7 @@ export function RoadmapView({ bucketId, roadmap }: RoadmapViewProps) {
         <div className="mt-8 pt-8 border-t border-white/5">
           <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles size={14} className="text-yellow-500" />
-            Curated Recommendations
+            추천 로케이션 & 팁 (Recommendations)
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {roadmap.recommendations.map((rec, i) => (

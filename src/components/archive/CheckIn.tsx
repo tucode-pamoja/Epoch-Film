@@ -34,30 +34,12 @@ export function CheckIn({ bucketId }: CheckInProps) {
     try {
       setUploading(true)
 
-      // 1. Upload file to Supabase Storage
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${bucketId}-${Date.now()}.${fileExt}`
-      const filePath = `${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('memories')
-        .upload(filePath, file)
-
-      if (uploadError) throw uploadError
-
-      // 2. Get Public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('memories')
-        .getPublicUrl(filePath)
-
-      // 3. Save metadata to DB via Server Action
       const formData = new FormData()
-      formData.append('bucketId', bucketId)
-      formData.append('mediaUrl', publicUrl)
-      formData.append('mediaType', 'IMAGE')
-      
-      await saveMemory(formData)
-      
+      formData.append('image', file)
+      formData.append('caption', 'Capture the Moment')
+
+      await saveMemory(bucketId, formData)
+
       // Cleanup
       setFile(null)
       setPreview(null)
@@ -79,7 +61,7 @@ export function CheckIn({ bucketId }: CheckInProps) {
       </h3>
 
       {!preview ? (
-        <div 
+        <div
           onClick={() => fileInputRef.current?.click()}
           className="group relative flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-white/[0.02] cursor-pointer transition-all"
         >
@@ -87,24 +69,24 @@ export function CheckIn({ bucketId }: CheckInProps) {
             <Upload className="w-8 h-8" />
             <span className="text-sm">Tab to upload photo</span>
           </div>
-          <input 
+          <input
             ref={fileInputRef}
-            type="file" 
-            accept="image/*" 
-            className="hidden" 
+            type="file"
+            accept="image/*"
+            className="hidden"
             onChange={handleFileSelect}
           />
         </div>
       ) : (
         <div className="space-y-4">
           <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black/50">
-            <Image 
-              src={preview} 
-              alt="Preview" 
-              fill 
+            <Image
+              src={preview}
+              alt="Preview"
+              fill
               className="object-contain"
             />
-            <button 
+            <button
               onClick={() => {
                 setFile(null)
                 setPreview(null)
@@ -114,9 +96,9 @@ export function CheckIn({ bucketId }: CheckInProps) {
               <X size={16} />
             </button>
           </div>
-          
-          <Button 
-            onClick={handleUpload} 
+
+          <Button
+            onClick={handleUpload}
             disabled={uploading}
             className="w-full h-12 rounded-xl bg-primary text-black hover:bg-primary/90 font-medium"
           >
