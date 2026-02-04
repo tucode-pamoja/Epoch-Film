@@ -40,7 +40,7 @@ export async function createBucket(formData: FormData) {
     importance: parseInt(importance),
     description,
     tags, // Add tags here
-    status: 'ACTIVE', // Default status
+    is_public: true, // Default to public for now or add to form
     is_pinned: false,
   })
 
@@ -50,6 +50,7 @@ export async function createBucket(formData: FormData) {
   }
 
   revalidatePath('/archive')
+  await updateQuestProgress('CREATE_BUCKET')
   redirect('/archive')
 }
 
@@ -66,6 +67,9 @@ export async function saveMemory(bucketId: string, formData: FormData) {
 
   const caption = formData.get('caption') as string
   const imageFile = formData.get('image') as File | null
+  const locationLat = formData.get('location_lat') as string
+  const locationLng = formData.get('location_lng') as string
+  const capturedAt = formData.get('captured_at') as string
 
   let imageUrl: string | null = null
 
@@ -94,6 +98,9 @@ export async function saveMemory(bucketId: string, formData: FormData) {
     user_id: user.id,
     media_url: imageUrl,
     caption: caption || '새로운 기록이 추가되었습니다.',
+    location_lat: locationLat ? parseFloat(locationLat) : null,
+    location_lng: locationLng ? parseFloat(locationLng) : null,
+    captured_at: capturedAt || null,
   })
 
   if (error) {
@@ -103,6 +110,7 @@ export async function saveMemory(bucketId: string, formData: FormData) {
 
   revalidatePath(`/archive/${bucketId}`)
   revalidatePath('/archive')
+  await updateQuestProgress('ADD_MEMORY')
 }
 
 export async function createLetter(formData: FormData) {
@@ -210,6 +218,8 @@ export async function completeBucket(bucketId: string, formData: FormData) {
   revalidatePath('/archive')
   revalidatePath('/timeline')
   revalidatePath(`/archive/${bucketId}`)
+
+  await updateQuestProgress('COMPLETE_BUCKET')
 }
 
 import Groq from 'groq-sdk'
@@ -527,6 +537,7 @@ export async function updateBucket(bucketId: string, formData: FormData) {
       title,
       category,
       description,
+      is_public: isPublic,
     })
     .eq('id', bucketId)
     .eq('user_id', user.id)
@@ -599,4 +610,267 @@ export async function setBucketThumbnail(bucketId: string, imageUrl: string) {
 
   revalidatePath(`/archive/${bucketId}`)
   revalidatePath('/archive')
+}
+
+export async function getUserStats() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: buckets } = await supabase
+    .from('buckets')
+    .select('status, created_at')
+    .eq('user_id', user.id)
+
+  const completed = buckets?.filter(b => b.status === 'ACHIEVED').length || 0
+  const active = buckets?.filter(b => b.status === 'ACTIVE').length || 0
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('xp, level')
+    .eq('id', user.id)
+    .single()
+
+  const baseXp = profile?.xp || 0
+  const totalXp = baseXp + (completed * 100)
+  const currentLevel = Math.floor(totalXp / 500) + 1
+  const nextLevelXp = currentLevel * 500
+
+  const { data: memories } = await supabase
+    .from('memories')
+    .select('created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  let streak = 0
+  if (memories && memories.length > 0) {
+    const dates = [...new Set(memories.map(m => new Date(m.created_at).toDateString()))]
+    const today = new Date().toDateString()
+    const yesterday = new Date(Date.now() - 86400000).toDateString()
+
+    if (dates[0] === today || dates[0] === yesterday) {
+      streak = 1
+      for (let i = 0; i < dates.length - 1; i++) {
+        const d1 = new Date(dates[i])
+        const d2 = new Date(dates[i + 1])
+        const diff = Math.abs(d1.getTime() - d2.getTime()) / (1000 * 3600 * 24)
+        if (diff <= 1.5) {
+          streak++
+        } else {
+          break
+        }
+      }
+    }
+  }
+
+  return {
+    level: currentLevel,
+    xp: totalXp,
+    nextLevelXp,
+    streak,
+    completedDreams: completed,
+    activeDreams: active
+  }
+}
+
+export async function getActiveQuests() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // Ensure user_quests exist for all active quests
+  const { data: allQuests } = await supabase
+    .from('quests')
+    .select('*')
+    .eq('is_active', true)
+
+  if (!allQuests) return []
+
+  // Get current user progress
+  const { data: userQuests } = await supabase
+    .from('user_quests')
+    .select('*, quests(*)')
+    .eq('user_id', user.id)
+
+  // Map progress to quests
+  return allQuests.map(quest => {
+    const userQuest = userQuests?.find(uq => uq.quest_id === quest.id)
+    return {
+      ...quest,
+      progress: userQuest?.progress || 0,
+      is_completed: userQuest?.status === 'COMPLETED' || userQuest?.status === 'CLAIMED',
+      is_claimed: userQuest?.status === 'CLAIMED'
+    }
+  })
+}
+
+export async function updateQuestProgress(type: string, amount: number = 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data: activeQuests } = await supabase
+    .from('quests')
+    .select('*')
+    .eq('requirement_type', type)
+    .eq('is_active', true)
+
+  if (!activeQuests) return
+
+  for (const quest of activeQuests) {
+    // Upsert progress
+    const { data: existing } = await supabase
+      .from('user_quests')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('quest_id', quest.id)
+      .single()
+
+    if (existing) {
+      if (existing.status !== 'ACTIVE') continue
+
+      const newProgress = existing.progress + amount
+      const isNowCompleted = newProgress >= quest.requirement_count
+
+      await supabase
+        .from('user_quests')
+        .update({
+          progress: newProgress,
+          status: isNowCompleted ? 'COMPLETED' : 'ACTIVE',
+          completed_at: isNowCompleted ? new Date().toISOString() : null
+        })
+        .eq('id', existing.id)
+    } else {
+      const isNowCompleted = amount >= quest.requirement_count
+      await supabase
+        .from('user_quests')
+        .insert({
+          user_id: user.id,
+          quest_id: quest.id,
+          progress: amount,
+          status: isNowCompleted ? 'COMPLETED' : 'ACTIVE',
+          completed_at: isNowCompleted ? new Date().toISOString() : null
+        })
+    }
+  }
+}
+
+export async function claimQuestReward(questId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized' }
+
+  const { data: userQuest, error: fetchError } = await supabase
+    .from('user_quests')
+    .select('*, quests(*)')
+    .eq('user_id', user.id)
+    .eq('quest_id', questId)
+    .single()
+
+  if (fetchError || !userQuest || userQuest.status !== 'COMPLETED') {
+    return { success: false, error: '퀘스트가 완료되지 않았거나 이미 보상을 받았습니다.' }
+  }
+
+  // Update status to CLAIMED
+  await supabase
+    .from('user_quests')
+    .update({ status: 'CLAIMED', claimed_at: new Date().toISOString() })
+    .eq('id', userQuest.id)
+
+  // Add XP to user
+  const xpReward = userQuest.quests.xp_reward
+  const { data: profile } = await supabase
+    .from('users')
+    .select('xp')
+    .eq('id', user.id)
+    .single()
+
+  await supabase
+    .from('users')
+    .update({ xp: (profile?.xp || 0) + xpReward })
+    .eq('id', user.id)
+
+  revalidatePath('/archive')
+  return { success: true, xpReward }
+}
+
+export async function getPublicBuckets() {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('buckets')
+    .select('*, users(nickname, profile_image_url)')
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.warn('[DB Sync] Public buckets fetch failed, attempting legacy fallback:', error.message)
+    const { data: fallbackData } = await supabase
+      .from('buckets')
+      .select('*, users(nickname, profile_image_url)')
+      .limit(20)
+    return fallbackData || []
+  }
+  return data || []
+}
+
+export async function getHallOfFameBuckets() {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('buckets')
+    .select('*, users(nickname, profile_image_url)')
+    .eq('is_public', true)
+    .order('tickets', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    console.warn('[DB Sync] Hall of Fame fetch failed, attempting legacy fallback:', error.message)
+    const { data: fallbackData } = await supabase
+      .from('buckets')
+      .select('*, users(nickname, profile_image_url)')
+      .limit(10)
+    return fallbackData || []
+  }
+  return data || []
+}
+
+export async function issueTicket(bucketId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized' }
+
+  // 1. Check if already issued
+  const { data: existing } = await supabase
+    .from('bucket_tickets')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('bucket_id', bucketId)
+    .single()
+
+  if (existing) return { success: false, error: '이미 티켓을 발행했습니다.' }
+
+  // 2. Issue ticket
+  const { error: insertError } = await supabase
+    .from('bucket_tickets')
+    .insert({ user_id: user.id, bucket_id: bucketId })
+
+  if (insertError) {
+    // If table doesn't exist yet, we might get an error. 
+    // Fallback to updating count directly for now if desired, but better to fix DB.
+    console.error('Ticket insertion error:', insertError)
+    return { success: false, error: insertError.message }
+  }
+
+  // 3. Increment ticket count in buckets table
+  // In a robust system, this would be a trigger.
+  const { data: bucket } = await supabase.from('buckets').select('tickets').eq('id', bucketId).single()
+  await supabase
+    .from('buckets')
+    .update({ tickets: (bucket?.tickets || 0) + 1 })
+    .eq('id', bucketId)
+
+  revalidatePath('/explore')
+  revalidatePath('/hall-of-fame')
+  revalidatePath(`/archive/${bucketId}`)
+
+  return { success: true }
 }

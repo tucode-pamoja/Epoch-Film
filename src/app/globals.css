@@ -343,3 +343,11 @@ h1 {
     transform: translateY(-10vh) translateX(20px);
   }
 }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Telescope, Film, Trophy, Medal } from 'lucide-react'
+import { Home, Telescope, Film, Trophy, User } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -40,10 +40,10 @@ export function BottomNav() {
             id: 'hall-of-fame'
         },
         {
-            label: '수상 (Awards)',
-            href: '/awards',
-            icon: Medal,
-            id: 'awards'
+            label: '프로필 (Profile)',
+            href: '/profile',
+            icon: User,
+            id: 'profile'
         }
     ]
 

@@ -12,9 +12,10 @@ import { useRouter } from 'next/navigation'
 interface BucketCardProps {
   bucket: Bucket
   onComplete?: () => void
+  isPublic?: boolean
 }
 
-export function BucketCard({ bucket, onComplete }: BucketCardProps) {
+export function BucketCard({ bucket, onComplete, isPublic = false }: BucketCardProps) {
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
@@ -127,34 +128,38 @@ export function BucketCard({ bucket, onComplete }: BucketCardProps) {
 
       {/* Top Bar - Functional Icons */}
       <div className="relative z-20 p-6 flex items-center justify-between" style={{ transform: "translateZ(40px)" }}>
-        <span className={`font-mono-technical text-[8px] tracking-[0.2em] px-2 py-0.5 rounded-sm border uppercase backdrop-blur-md ${isAchieved
-          ? 'bg-cyan-film/20 border-cyan-film/40 text-cyan-film shadow-[0_0_10px_rgba(78,205,196,0.2)]'
-          : 'bg-gold-film/20 border-gold-film/40 text-gold-film shadow-[0_0_10px_rgba(201,162,39,0.2)]'
-          }`}>
-          {isAchieved ? 'VERIFIED' : 'IN PRODUCTION'}
-        </span>
+        {!isPublic && (
+          <span className={`font-mono-technical text-[8px] tracking-[0.2em] px-2 py-0.5 rounded-sm border uppercase backdrop-blur-md ${isAchieved
+            ? 'bg-cyan-film/20 border-cyan-film/40 text-cyan-film shadow-[0_0_10px_rgba(78,205,196,0.2)]'
+            : 'bg-gold-film/20 border-gold-film/40 text-gold-film shadow-[0_0_10px_rgba(201,162,39,0.2)]'
+            }`}>
+            {isAchieved ? 'VERIFIED' : 'IN PRODUCTION'}
+          </span>
+        )}
 
-        <div className="flex items-center gap-1">
-          {!isAchieved && (
+        {!isPublic && (
+          <div className="flex items-center gap-1">
+            {!isAchieved && (
+              <button
+                onClick={handleComplete}
+                className="p-2 text-white/40 transition-all hover:text-green-400 active:scale-90"
+              >
+                <CheckCircle2 size={18} />
+              </button>
+            )}
             <button
-              onClick={handleComplete}
-              className="p-2 text-white/40 transition-all hover:text-green-400 active:scale-90"
+              onClick={handlePin}
+              className="p-2 text-white/30 transition-all hover:text-gold-film"
             >
-              <CheckCircle2 size={18} />
+              <Star
+                size={18}
+                className={clsx(
+                  bucket.is_pinned ? "fill-gold-film text-gold-film" : "fill-transparent"
+                )}
+              />
             </button>
-          )}
-          <button
-            onClick={handlePin}
-            className="p-2 text-white/30 transition-all hover:text-gold-film"
-          >
-            <Star
-              size={18}
-              className={clsx(
-                bucket.is_pinned ? "fill-gold-film text-gold-film" : "fill-transparent"
-              )}
-            />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Main Poster Content - Theatrical Centered Layout */}
@@ -182,12 +187,7 @@ export function BucketCard({ bucket, onComplete }: BucketCardProps) {
         <div className="flex items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-2 group/stat">
             <Ticket size={14} className="text-gold-film/80 group-hover/stat:text-gold-film transition-colors" />
-            <span className="font-mono-technical text-[9px] text-gold-film/60 group-hover/stat:text-gold-film tracking-widest uppercase">TICKET (142)</span>
-          </div>
-
-          <div className="flex items-center gap-2 text-white/20 group-hover/card:text-white/40 transition-colors">
-            <MessageSquare size={14} />
-            <span className="font-mono-technical text-[10px]">8</span>
+            <span className="font-mono-technical text-[9px] text-gold-film/60 group-hover/stat:text-gold-film tracking-widest uppercase">TICKET ({bucket.tickets || 0})</span>
           </div>
         </div>
 

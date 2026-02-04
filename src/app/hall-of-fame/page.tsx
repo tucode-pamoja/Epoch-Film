@@ -1,6 +1,9 @@
 import { HallOfFameClient } from '@/components/archive/HallOfFameClient'
+import { getHallOfFameBuckets } from '@/app/archive/actions'
 
-export default function HallOfFamePage() {
+export default async function HallOfFamePage() {
+  const buckets = await getHallOfFameBuckets()
+
   return (
     <div style={{ width: '100%', minHeight: '100vh', padding: '2rem 1.5rem' }} className="bg-void overflow-x-hidden selection:bg-gold-film/30">
       <div style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }} className="relative z-10 space-y-12 pt-8">
@@ -11,7 +14,7 @@ export default function HallOfFamePage() {
         </header>
 
         <main>
-          <HallOfFameClient />
+          <HallOfFameClient initialBuckets={buckets} />
         </main>
       </div>
     </div>

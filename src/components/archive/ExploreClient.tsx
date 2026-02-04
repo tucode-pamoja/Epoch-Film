@@ -1,134 +1,140 @@
 'use client'
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Ticket, MessageSquare, Share2, MoreHorizontal, User } from 'lucide-react'
-import Image from 'next/image'
+import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Ticket, User, PlayCircle, Trophy, ChevronDown, Film } from 'lucide-react'
+import { BucketCard } from '@/components/buckets/BucketCard'
 
-// Mock Data for Explore Feed
-const PUBLIC_BUCKETS = [
-    {
-        id: '1',
-        user: { name: 'Dreamer_01', avatar: null },
-        title: '오로라 헌팅 in 아이슬란드',
-        category: 'TRAVEL',
-        image: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7', // Placeholder
-        description: '드디어 꿈꾸던 오로라를 봤습니다. 영하 20도의 추위도 잊게 만드는 장관이었어요.',
-        tickets: 142,
-        comments: 8,
-        is_ticked: false
-    },
-    {
-        id: '2',
-        user: { name: 'Cinephile_Kim', avatar: null },
-        title: '단편 영화 제작하기',
-        category: 'CAREER',
-        image: null,
-        description: '첫 번째 단편 영화 "기억의 조각" 크랭크업! 3개월간의 대장정이 마무리되었습니다.',
-        tickets: 89,
-        comments: 12,
-        is_ticked: true
-    },
-    {
-        id: '3',
-        user: { name: 'Runner_Lee', avatar: null },
-        title: '도쿄 마라톤 완주',
-        category: 'GROWTH',
-        image: 'https://images.unsplash.com/photo-1552674605-4694559e5bc7',
-        description: '42.195km. 포기하고 싶은 순간이 100번도 넘었지만 끝내 해냈습니다.',
-        tickets: 256,
-        comments: 43,
-        is_ticked: false
-    }
-]
+interface ExploreClientProps {
+    initialBuckets: any[]
+}
 
-export function ExploreClient() {
-    const [feed, setFeed] = useState(PUBLIC_BUCKETS)
+export function ExploreClient({ initialBuckets }: ExploreClientProps) {
+    const [activeTab, setActiveTab] = useState<'ACHIEVED' | 'ACTIVE'>('ACHIEVED')
+    const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-    const handleTicket = (id: string) => {
-        setFeed(feed.map(item => {
-            if (item.id === id) {
-                return {
-                    ...item,
-                    tickets: item.is_ticked ? item.tickets - 1 : item.tickets + 1,
-                    is_ticked: !item.is_ticked
-                }
-            }
-            return item
-        }))
-    }
+    useEffect(() => {
+        const originalHtmlOverflow = document.documentElement.style.overflow
+        const originalBodyOverflow = document.body.style.overflow
+
+        document.documentElement.style.overflow = 'hidden'
+        document.body.style.overflow = 'hidden'
+
+        return () => {
+            document.documentElement.style.overflow = originalHtmlOverflow
+            document.body.style.overflow = originalBodyOverflow
+        }
+    }, [])
+
+    const filteredFeed = initialBuckets.filter(item => item.status === activeTab)
+
+    const tabs = [
+        { id: 'ACHIEVED', label: '달성한 목표', icon: Trophy },
+        { id: 'ACTIVE', label: '계획중인 목표', icon: PlayCircle }
+    ]
 
     return (
-        <div style={{ width: '100%' }} className="space-y-8 pb-32">
-            {feed.map((item, index) => (
-                <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-velvet border border-white/5 rounded-sm overflow-hidden film-border shadow-deep"
-                >
-                    {/* Header */}
-                    <div className="p-4 flex items-center justify-between border-b border-white/5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-smoke">
-                                <User size={16} />
-                            </div>
-                            <div>
-                                <div className="text-sm text-celluloid font-display">{item.user.name}</div>
-                                <div className="text-[10px] text-smoke font-mono-technical uppercase">{item.category}</div>
-                            </div>
-                        </div>
-                        <button className="text-smoke hover:text-celluloid">
-                            <MoreHorizontal size={20} />
-                        </button>
-                    </div>
+        <div className="h-full w-full flex flex-col bg-void text-white">
+            {/* 1. Interactive Navigation HUD - Proximity-based visibility */}
+            <div className="fixed top-0 left-0 right-0 z-[100] flex justify-center pt-8 pointer-events-none h-32 group/nav">
+                {/* Hit Area Trigger */}
+                <div className="absolute inset-0 pointer-events-auto" />
 
-                    {/* Content */}
-                    <div className="p-0">
-                        {item.image && (
-                            <div className="relative aspect-video w-full bg-darkroom">
-                                {/* Placeholder for image, using div for now as Next/Image needs configured domains */}
-                                <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                            </div>
-                        )}
-                        <div className="p-6 space-y-3">
-                            <h3 className="text-xl font-display text-gold-warm">{item.title}</h3>
-                            <p className="text-sm text-smoke font-light leading-relaxed">
-                                {item.description}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Action Bar */}
-                    <div className="px-6 py-4 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-6">
+                <div className="relative flex flex-col items-center gap-4 transition-all duration-700 opacity-0 -translate-y-4 group-hover/nav:opacity-100 group-hover/nav:translate-y-0 pointer-events-auto">
+                    {/* Tab Selector */}
+                    <div className="flex items-center gap-1 p-1 bg-void/60 backdrop-blur-3xl rounded-full border border-white/10 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]">
+                        {tabs.map((tab) => (
                             <button
-                                onClick={() => handleTicket(item.id)}
-                                className={`flex items-center gap-2 transition-colors ${item.is_ticked ? 'text-gold-film' : 'text-smoke hover:text-gold-film'}`}
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`
+                                    flex items-center gap-2 px-6 py-2 rounded-full text-[11px] font-display transition-all
+                                    ${activeTab === tab.id
+                                        ? 'bg-gold-film text-velvet shadow-warm font-bold'
+                                        : 'text-smoke hover:text-white'
+                                    }
+                                `}
                             >
-                                <div className={`p-2 rounded-full ${item.is_ticked ? 'bg-gold-film/10' : 'bg-transparent'}`}>
-                                    <Ticket size={20} fill={item.is_ticked ? "currentColor" : "none"} />
-                                </div>
-                                <span className="text-xs font-mono-technical">
-                                    {item.is_ticked ? 'TICKETED' : 'TICKET'} ({item.tickets})
-                                </span>
+                                <tab.icon size={13} />
+                                <span className="whitespace-nowrap">{tab.label}</span>
                             </button>
-
-                            <button className="flex items-center gap-2 text-smoke hover:text-cyan-film transition-colors">
-                                <div className="p-2">
-                                    <MessageSquare size={20} />
-                                </div>
-                                <span className="text-xs font-mono-technical">{item.comments}</span>
-                            </button>
-                        </div>
-
-                        <button className="text-smoke hover:text-white transition-colors">
-                            <Share2 size={20} />
-                        </button>
+                        ))}
                     </div>
-                </motion.div>
-            ))}
+                </div>
+            </div>
+
+            {/* 2. Main Snap Feed */}
+            <div
+                ref={scrollContainerRef}
+                className="flex-1 w-full overflow-y-auto snap-y snap-mandatory no-scrollbar scroll-smooth"
+            >
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="w-full"
+                    >
+                        {filteredFeed.map((bucket, index) => (
+                            <section
+                                key={bucket.id}
+                                className="h-[100dvh] w-full snap-start snap-always flex items-center justify-center relative px-6"
+                            >
+                                <div className="w-full max-w-[340px] flex flex-col gap-6 -translate-y-8">
+                                    {/* Creator Badge */}
+                                    <div className="flex items-center justify-between px-1">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full border border-gold-film/20 bg-darkroom flex items-center justify-center shrink-0 overflow-hidden">
+                                                {bucket.users?.profile_image_url ? (
+                                                    <img src={bucket.users.profile_image_url} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <User size={18} className="text-gold-film/40" />
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-display text-white tracking-widest leading-none">
+                                                    {bucket.users?.nickname || 'Unknown Director'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] font-mono-technical text-gold-film font-bold">{(bucket.tickets || 0).toLocaleString()} TICKETS</span>
+                                        </div>
+                                    </div>
+
+                                    {/* The Poster (Main Attraction) */}
+                                    <div className="relative aspect-[2/3] w-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] rounded-lg overflow-hidden group">
+                                        <BucketCard
+                                            bucket={bucket}
+                                            isPublic={true}
+                                        />
+                                    </div>
+
+
+                                    {/* Scroll Guide */}
+                                    {index === 0 && (
+                                        <motion.div
+                                            animate={{ y: [0, 10, 0] }}
+                                            transition={{ repeat: Infinity, duration: 2.5 }}
+                                            className="absolute -bottom-24 left-1/2 -translate-x-1/2 opacity-20"
+                                        >
+                                            <ChevronDown size={24} />
+                                        </motion.div>
+                                    )}
+                                </div>
+                            </section>
+                        ))}
+                    </motion.div>
+                </AnimatePresence>
+
+                {filteredFeed.length === 0 && (
+                    <div className="h-[100dvh] flex flex-col items-center justify-center opacity-20">
+                        <Film size={48} className="mb-4" />
+                        <span className="text-xs tracking-[0.5em] uppercase">No screening scheduled</span>
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

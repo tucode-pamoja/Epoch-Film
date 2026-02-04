@@ -5,11 +5,18 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Camera, Send, Upload, Film, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
+import { extractImageMetadata, ImageMetadata } from '@/utils/media'
 
 interface AddRecordModalProps {
     isOpen: boolean
     onClose: () => void
-    onAdd: (data: { image?: File; caption: string }) => Promise<void>
+    onAdd: (data: {
+        image?: File;
+        caption: string;
+        location_lat?: number | null;
+        location_lng?: number | null;
+        captured_at?: string | null;
+    }) => Promise<void>
     bucketTitle: string
 }
 
@@ -18,9 +25,10 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
     const [imageFile, setImageFile] = useState<File | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [metadata, setMetadata] = useState<ImageMetadata | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
             setImageFile(file)
@@ -29,6 +37,10 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
                 setPreviewUrl(reader.result as string)
             }
             reader.readAsDataURL(file)
+
+            // Extract Metadata
+            const extracted = await extractImageMetadata(file)
+            setMetadata(extracted)
         }
     }
 
@@ -40,12 +52,16 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
         try {
             await onAdd({
                 image: imageFile || undefined,
-                caption
+                caption,
+                location_lat: metadata?.location_lat,
+                location_lng: metadata?.location_lng,
+                captured_at: metadata?.captured_at
             })
             // Reset and close
             setCaption('')
             setImageFile(null)
             setPreviewUrl(null)
+            setMetadata(null)
             onClose()
         } catch (error) {
             console.error('Failed to add record:', error)

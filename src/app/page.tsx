@@ -2,16 +2,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { HomeClient } from '@/components/dashboard/HomeClient'
-
-// Mock Stats - In real app, calculate these from buckets
-const MOCK_STATS = {
-  level: 4,
-  xp: 1250,
-  nextLevelXp: 2000,
-  streak: 7,
-  completedDreams: 12,
-  activeDreams: 5
-}
+import { getUserStats } from './archive/actions'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -29,6 +20,7 @@ export default async function HomePage() {
     .select('*')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
+  const stats = await getUserStats()
 
   return (
     <div className="min-h-screen bg-void p-6 sm:p-12 overflow-x-hidden selection:bg-gold-film/30">
@@ -42,7 +34,10 @@ export default async function HomePage() {
         </header>
 
         <main>
-          <HomeClient buckets={buckets || []} userStats={MOCK_STATS} />
+          <HomeClient
+            buckets={buckets || []}
+            userStats={stats || { level: 1, xp: 0, nextLevelXp: 500, streak: 0, completedDreams: 0, activeDreams: 0 }}
+          />
         </main>
       </div>
     </div>

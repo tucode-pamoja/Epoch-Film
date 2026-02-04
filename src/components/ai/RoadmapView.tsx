@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, CheckCircle2, Circle, Loader2, RefreshCw } from 'lucide-react'
+import { Sparkles, CheckCircle2, Circle, Loader2, RefreshCw, Film } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { generateRoadmap } from '@/app/archive/actions'
 import { motion } from 'framer-motion'
@@ -28,9 +28,10 @@ interface RoadmapData {
 interface RoadmapViewProps {
   bucketId: string
   roadmap: RoadmapData | null
+  isOwner: boolean
 }
 
-export function RoadmapView({ bucketId, roadmap }: RoadmapViewProps) {
+export function RoadmapView({ bucketId, roadmap, isOwner }: RoadmapViewProps) {
   const [isGenerating, setIsGenerating] = useState(false)
 
   const handleGenerate = async () => {
@@ -46,6 +47,20 @@ export function RoadmapView({ bucketId, roadmap }: RoadmapViewProps) {
   }
 
   if (!roadmap) {
+    if (!isOwner) {
+      return (
+        <div className="rounded-3xl border border-white/5 bg-void/30 p-12 text-center backdrop-blur-xl">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white/5 border border-white/10">
+            <Film className="h-10 w-10 text-smoke/20" />
+          </div>
+          <h3 className="mb-3 text-2xl font-display text-white italic tracking-tight">"아직 연출하지 않은 꿈입니다"</h3>
+          <p className="text-smoke/40 font-mono-technical text-[10px] tracking-[0.2em] uppercase">
+            THE SCENARIO FOR THIS PRODUCTION HAS NOT BEEN WRITTEN YET.
+          </p>
+        </div>
+      )
+    }
+
     return (
       <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-purple-500/5 to-blue-500/5 p-8 text-center backdrop-blur-xl">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5">

@@ -5,38 +5,22 @@ import Link from 'next/link'
 import { Trophy } from 'lucide-react'
 import { LifeDashboard } from '@/components/dashboard/LifeDashboard'
 import { QuestList } from '@/components/dashboard/QuestList'
+import { getUserStats, getActiveQuests } from './actions'
 
-const MOCK_STATS = {
-  level: 4,
-  xp: 1250,
-  nextLevelXp: 2000,
-  streak: 7,
-  completedDreams: 12,
-  activeDreams: 5
-}
+export default async function ArchivePage() {
+  const stats = await getUserStats()
+  const quests = await getActiveQuests()
 
-const MOCK_QUESTS = [
-  {
-    id: '1',
-    title: '시네마틱 확장',
-    description: '이번 주에 아카이브에 2개의 새로운 항목을 추가하세요.',
-    xp_reward: 200,
-    progress: 1,
-    requirement_count: 2,
-    is_completed: false
-  },
-  {
-    id: '2',
-    title: '도큐멘터리 작가',
-    description: '설명과 함께 체크인 샷을 업로드하세요.',
-    xp_reward: 100,
-    progress: 1,
-    requirement_count: 1,
-    is_completed: true
+  // Define default stats in case fetched stats are null/undefined
+  const defaultStats = {
+    level: 1,
+    xp: 0,
+    nextLevelXp: 500,
+    streak: 0,
+    completedDreams: 0,
+    activeDreams: 0
   }
-]
 
-export default function ArchivePage() {
   return (
     <div className="min-h-screen bg-void p-6 sm:p-12 overflow-x-hidden selection:bg-gold-film/30">
       {/* Background Ambience */}
@@ -79,7 +63,7 @@ export default function ArchivePage() {
           {/* Main Content: Dashboard & Sequences */}
           <div className="lg:col-span-8 space-y-20">
             <section>
-              <LifeDashboard userStats={MOCK_STATS} />
+              <LifeDashboard userStats={stats || defaultStats} />
             </section>
 
             <section className="space-y-12">
@@ -92,7 +76,7 @@ export default function ArchivePage() {
           {/* Sidebar: Quests & Activity */}
           <div className="lg:col-span-4 space-y-12">
             <section className="sticky top-12">
-              <QuestList quests={MOCK_QUESTS} />
+              <QuestList quests={quests || []} />
 
               <div className="mt-12 p-8 bg-darkroom/50 rounded-sm border border-white/5 film-border">
                 <h3 className="font-mono-technical text-[10px] text-smoke tracking-widest uppercase mb-4">제작 노트 (Studio_Note)</h3>

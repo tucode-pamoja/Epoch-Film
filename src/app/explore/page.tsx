@@ -1,22 +1,20 @@
-
 import { ExploreClient } from '@/components/archive/ExploreClient'
+import { StarField } from '@/components/layout/StarField'
+import { getPublicBuckets } from '@/app/archive/actions'
 
-export default function ExplorePage() {
+export default async function ExplorePage() {
+    const buckets = await getPublicBuckets()
+
     return (
-        <div style={{ width: '100%', minHeight: '100vh', padding: '2rem 1rem' }} className="bg-void overflow-x-hidden selection:bg-gold-film/30">
-            <div style={{ width: '100%', maxWidth: '640px', margin: '0 auto' }} className="relative z-10 space-y-8 pt-8">
-                <header className="flex flex-col items-center text-center animate-fade-in-up">
-                    <div className="font-mono-technical text-gold-film/60 tracking-[0.4em] uppercase text-[10px]">Now Screening</div>
-                    <h1 className="text-4xl font-display text-celluloid">
-                        Explore
-                    </h1>
-                    <p className="text-smoke text-sm mt-2">다른 드리머들의 이야기에 티켓을 보내세요.</p>
-                </header>
+        <div className="relative h-[100dvh] w-full overflow-hidden bg-void no-scrollbar">
+            <StarField />
 
-                <main>
-                    <ExploreClient />
-                </main>
-            </div>
+            {/* Cinematic Background Glow */}
+            <div className="fixed inset-0 bg-gradient-to-b from-darkroom via-transparent to-void pointer-events-none z-10" />
+
+            <main className="relative z-20 h-full w-full">
+                <ExploreClient initialBuckets={buckets} />
+            </main>
         </div>
     )
 }

@@ -32,21 +32,22 @@ import { useRouter } from 'next/navigation'
 import { RoadmapView } from '@/components/ai/RoadmapView'
 import { Button } from '@/components/ui/Button'
 import { AddRecordModal } from '@/components/archive/AddRecordModal'
-import { saveMemory, updateBucket, updateMemory, deleteMemory, setBucketThumbnail } from '@/app/archive/actions'
+import { saveMemory, updateBucket, updateMemory, deleteMemory, setBucketThumbnail, issueTicket } from '@/app/archive/actions'
 
 interface BucketDetailClientProps {
     bucket: any
     memories: any[]
     letters: any[]
     currentUserId: string
+    hasIssuedTicket?: boolean
 }
 
-export function BucketDetailClient({ bucket, memories, letters, currentUserId }: BucketDetailClientProps) {
+export function BucketDetailClient({ bucket, memories, letters, currentUserId, hasIssuedTicket: initialHasIssuedTicket = false }: BucketDetailClientProps) {
     const isOwner = currentUserId === bucket.user_id
     const [activeTab, setActiveTab] = useState<'RECORD' | 'ROADMAP' | 'COMMENTS'>('RECORD')
     const [isAddRecordOpen, setIsAddRecordOpen] = useState(false)
-    const [hasAdmitted, setHasAdmitted] = useState(false)
-    const [admitCount, setAdmitCount] = useState(1248)
+    const [hasAdmitted, setHasAdmitted] = useState(initialHasIssuedTicket)
+    const [admitCount, setAdmitCount] = useState(bucket.tickets || 0)
     const [isMoreHorizontalOpen, setIsMoreHorizontalOpen] = useState(false)
     const [isEditOpen, setIsEditOpen] = useState(false)
     const [isUpdating, setIsUpdating] = useState(false)
@@ -63,9 +64,19 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
 
     const router = useRouter()
 
-    const handleAdmit = () => {
-        setHasAdmitted(!hasAdmitted)
-        setAdmitCount(prev => hasAdmitted ? prev - 1 : prev + 1)
+    const handleAdmit = async () => {
+        if (hasAdmitted) return // Prevent duplicate unless we implement undo
+
+        const previousCount = admitCount
+        setHasAdmitted(true)
+        setAdmitCount((prev: number) => prev + 1)
+
+        const result = await issueTicket(bucket.id)
+        if (!result.success) {
+            setHasAdmitted(false)
+            setAdmitCount(previousCount)
+            alert(result.error || '티켓 발행에 실패했습니다.')
+        }
     }
 
     const handleShare = async () => {
@@ -193,8 +204,8 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                     <span className="font-mono-technical text-[10px] tracking-widest uppercase">CLOSE_PRODUCTION</span>
                 </Link>
 
-                {/* Cinematic Hero Section - Portrait Poster Style */}
-                <section className="relative aspect-[3/4] md:aspect-[2/3] max-w-5xl mx-auto flex flex-col justify-between p-8 sm:p-20 rounded-md overflow-hidden border border-white/10 shadow-huge group mb-24">
+                {/* Cinematic Hero Section - Portrait Poster Style (Fitted & Proportional) */}
+                <section className="relative h-[70vh] sm:h-[85vh] aspect-[3/4] sm:aspect-[2/3] w-full max-w-[420px] mx-auto flex flex-col justify-between p-5 sm:p-8 rounded-lg overflow-hidden border border-white/10 shadow-huge group mb-12 sm:mb-24">
                     {/* Hero Background Layer */}
                     <div className="absolute inset-0 z-0">
                         {bucket.thumbnail_url || memories.length > 0 ? (
@@ -219,164 +230,105 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                         )}
                     </div>
 
-                    {/* Content Layer - Main Title Area */}
-                    <div className="relative z-10 w-full flex flex-col items-center text-center">
-                        <div className="space-y-8 max-w-5xl px-4 flex-grow flex flex-col justify-center">
-                            <h1 className="text-5xl md:text-7xl lg:text-[8rem] font-display leading-[1.1] text-white tracking-[-0.04em] drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)] uppercase break-keep">
+                    {/* Content Layer - Centered Title & Description */}
+                    <div className="relative z-10 w-full flex-grow flex flex-col items-center justify-center text-center py-4">
+                        <div className="space-y-4 w-full px-4">
+                            <h1 className="text-3xl sm:text-4xl md:text-5xl font-display leading-[1.1] text-white tracking-tight drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)] uppercase break-keep">
                                 {bucket.title}
                             </h1>
 
-                            <div className="relative px-8 py-3 rounded-2xl bg-void/60 backdrop-blur-md border border-white/10 max-w-3xl mx-auto shadow-2xl">
-                                <p className="text-base md:text-xl lg:text-2xl text-gold-film font-display italic tracking-[0.05em] font-light drop-shadow-md break-keep leading-relaxed">
+                            <div className="relative px-6 py-3 rounded-xl bg-void/70 backdrop-blur-md border border-white/10 w-full shadow-2xl">
+                                <p className="text-xs sm:text-sm md:text-base text-gold-film font-display italic tracking-[0.05em] font-light drop-shadow-md break-keep leading-relaxed">
                                     {bucket.description ? `"${bucket.description}"` : '"A CINEMATIC MASTERPIECE"'}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Glass Ticket Component - Anchored to Bottom */}
-                    <div className="relative z-20 w-full max-w-4xl mx-auto flex justify-center pb-8 pt-12">
+                    {/* Glass Ticket Component - Re-optimized for Narrow Poster */}
+                    <div className="relative z-20 w-full px-2 pb-2">
                         <motion.div
-                            className="relative max-w-4xl w-full perspective-1000 group/ticket"
+                            className="relative w-full perspective-1000 group/ticket"
                             whileHover={{
-                                rotateX: 3,
-                                rotateY: -3,
-                                scale: 1.02,
-                                transition: { duration: 0.5, ease: "easeOut" }
+                                rotateX: 2,
+                                rotateY: -2,
+                                scale: 1.01,
+                                transition: { duration: 0.4 }
                             }}
                         >
-                            {/* Main Glass Ticket Body Wrapper (No Mask here to prevent clipping dropdowns) */}
-                            <div className="relative flex flex-col sm:flex-row min-h-[160px] shadow-huge">
+                            <div className="relative flex flex-col shadow-huge overflow-hidden">
                                 {/* The Glass Base with Masking */}
                                 <div
                                     className="absolute inset-0 bg-white/5 backdrop-blur-3xl border border-white/10"
                                     style={{
                                         WebkitMaskImage: `
-                                            radial-gradient(circle 10px at 0 25%, transparent 100%, black 0),
-                                            radial-gradient(circle 10px at 0 50%, transparent 100%, black 0),
-                                            radial-gradient(circle 10px at 0 75%, transparent 100%, black 0),
-                                            radial-gradient(circle 10px at 100% 25%, transparent 100%, black 0),
-                                            radial-gradient(circle 10px at 100% 50%, transparent 100%, black 0),
-                                            radial-gradient(circle 10px at 100% 75%, transparent 100%, black 0),
-                                            radial-gradient(circle 12px at 30% 0, transparent 100%, black 0),
-                                            radial-gradient(circle 12px at 30% 100%, transparent 100%, black 0)
+                                            radial-gradient(circle 8px at 0 25%, transparent 100%, black 0),
+                                            radial-gradient(circle 8px at 100% 25%, transparent 100%, black 0),
+                                            radial-gradient(circle 10px at 30% 0, transparent 100%, black 0),
+                                            radial-gradient(circle 10px at 30% 100%, transparent 100%, black 0)
                                         `,
                                         WebkitMaskComposite: 'destination-in',
                                         maskComposite: 'intersect',
                                     }}
                                 />
 
-                                {/* Content stays inside but above the mask */}
-                                <div className="relative z-10 flex flex-col sm:flex-row w-full">
-                                    {/* LEFT SECTION: DIRECTOR_CREDIT */}
-                                    <div className="w-full sm:w-[30%] p-8 flex flex-col justify-center border-b sm:border-b-0 sm:border-r border-dashed border-white/10 relative">
-                                        <div className="space-y-4">
-                                            <div className="space-y-1">
-                                                <p className="font-mono-technical text-[8px] text-smoke/40 tracking-[0.4em] uppercase">Executive Producer</p>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md">
-                                                        <User size={16} className="text-gold-film/60" />
-                                                    </div>
-                                                    <div className="flex flex-col leading-none">
-                                                        <span className="text-sm font-display text-gold-warm tracking-tight">AGENT_{bucket.user_id.slice(0, 5).toUpperCase()}</span>
-                                                        <span className="text-[9px] font-mono-technical text-smoke/30 uppercase mt-1 tracking-tighter">Verified Studio Member</span>
-                                                    </div>
-                                                </div>
+                                {/* Ticket Content */}
+                                <div className="relative z-10 flex flex-col w-full divide-y divide-dashed divide-white/10">
+                                    {/* TOP: DIRECTOR & STATUS */}
+                                    <div className="p-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                                                <User size={10} className="text-gold-film/60" />
                                             </div>
-                                            <div className="inline-block px-2 py-0.5 bg-white/5 border border-white/10 rounded-sm">
-                                                <span className="text-[8px] font-mono-technical text-smoke/40 uppercase tracking-widest leading-none">SID: {bucket.id.slice(0, 8)}</span>
+                                            <div className="flex flex-col leading-none">
+                                                <p className="font-mono-technical text-[6px] text-smoke/40 tracking-[0.2em] uppercase">Executor</p>
+                                                <span className="text-[9px] font-display text-gold-warm tracking-tight">AGENT_{bucket.user_id?.slice(0, 5).toUpperCase() || 'USER'}</span>
                                             </div>
+                                        </div>
+                                        <div className="px-1 py-0.5 bg-white/5 border border-white/10 rounded-sm">
+                                            <span className="text-[6px] font-mono-technical text-smoke/40 uppercase tracking-widest leading-none">SID: {bucket.id?.slice(0, 8) || '0000'}</span>
                                         </div>
                                     </div>
 
-                                    {/* RIGHT SECTION: FILM_METADATA */}
-                                    <div className="flex-1 p-8 grid grid-cols-2 sm:grid-cols-4 gap-8 items-center bg-white/[0.01]">
-                                        {/* Genre */}
+                                    {/* BOTTOM: METADATA GRID */}
+                                    <div className="p-4 sm:p-5 grid grid-cols-2 gap-y-4 gap-x-2">
                                         <div className="space-y-1">
-                                            <p className="font-mono-technical text-[8px] text-smoke/40 tracking-[0.3em] uppercase opacity-50">Genre</p>
-                                            <p className="text-sm font-display text-smoke font-medium tracking-widest truncate uppercase pt-1">{bucket.category || 'CINEMA'}</p>
+                                            <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Genre</p>
+                                            <p className="text-[10px] sm:text-[11px] font-display text-smoke font-medium tracking-widest truncate uppercase">{bucket.category || 'CINEMA'}</p>
                                         </div>
-
-                                        {/* Premiere */}
                                         <div className="space-y-1">
-                                            <p className="font-mono-technical text-[8px] text-smoke/40 tracking-[0.3em] uppercase opacity-50">Premiere</p>
-                                            <p className="text-sm font-mono-technical text-celluloid font-bold pt-1">{formatDate(bucket?.created_at || new Date().toISOString())}</p>
+                                            <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Premiere</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono-technical text-celluloid font-bold">{formatDate(bucket?.created_at || new Date().toISOString())}</p>
                                         </div>
-
-                                        {/* Admit One (Ticket) */}
-                                        <div
-                                            onClick={handleAdmit}
-                                            className="flex flex-col items-center sm:items-start group/stat cursor-pointer hover:translate-y-[-2px] transition-transform select-none"
-                                        >
-                                            <p className="font-mono-technical text-[8px] text-smoke/40 tracking-[0.3em] uppercase mb-2 opacity-50">Admit_One</p>
+                                        <div onClick={handleAdmit} className="space-y-1 cursor-pointer group/stat">
+                                            <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Admit_One</p>
                                             <div className="flex items-center gap-2">
-                                                <motion.div
-                                                    whileTap={{ scale: 0.9 }}
-                                                    className={`p-1.5 rounded-sm transition-colors ${hasAdmitted ? 'bg-gold-film/10' : 'bg-transparent'}`}
-                                                >
-                                                    <Ticket
-                                                        size={16}
-                                                        className={`transition-colors ${hasAdmitted ? 'text-gold-film fill-gold-film' : 'text-smoke/40 group-hover/stat:text-gold-film'}`}
-                                                    />
-                                                </motion.div>
-                                                <span className={`text-lg font-mono-technical font-bold tracking-tighter leading-none transition-colors ${hasAdmitted ? 'text-gold-film' : 'text-smoke/60 group-hover/stat:text-smoke'}`}>
-                                                    {admitCount.toLocaleString()}
-                                                </span>
+                                                <Ticket size={12} className={`transition-colors ${hasAdmitted ? 'text-gold-film fill-gold-film' : 'text-smoke/40 group-hover/stat:text-gold-film'}`} />
+                                                <span className={`text-[11px] font-mono-technical font-bold ${hasAdmitted ? 'text-gold-film' : 'text-smoke/60'}`}>{admitCount.toLocaleString()}</span>
                                             </div>
                                         </div>
-
-                                        {/* More Actions Menu */}
-                                        <div className="relative flex flex-col items-center sm:items-start group/action select-none">
-                                            <p className="font-mono-technical text-[8px] text-smoke/40 tracking-[0.3em] uppercase mb-2 opacity-50">Manage_Reel</p>
-                                            <div className="relative">
-                                                <button
-                                                    onClick={() => setIsMoreHorizontalOpen(!isMoreHorizontalOpen)}
-                                                    className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all duration-300 hover:scale-110 group/more"
-                                                    title="더 보기"
-                                                >
-                                                    <MoreHorizontal size={16} className="text-smoke/60 group-hover/more:text-smoke" />
+                                        <div className="space-y-1">
+                                            <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Manage</p>
+                                            <div className="flex items-center gap-2 relative">
+                                                <button onClick={() => setIsMoreHorizontalOpen(!isMoreHorizontalOpen)} className="p-1.5 bg-white/5 rounded-full hover:bg-white/10 transition-all">
+                                                    <MoreHorizontal size={14} className="text-smoke/60" />
                                                 </button>
-
-                                                {/* More Menu Dropdown */}
                                                 <AnimatePresence>
                                                     {isMoreHorizontalOpen && (
                                                         <motion.div
-                                                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                            initial={{ opacity: 0, scale: 0.9, y: 5 }}
                                                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                                            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-40 bg-void/90 backdrop-blur-xl border border-white/10 rounded-lg overflow-hidden z-50 shadow-huge"
+                                                            exit={{ opacity: 0, scale: 0.9, y: 5 }}
+                                                            className="absolute bottom-full right-0 mb-2 w-32 bg-void/95 backdrop-blur-xl border border-white/10 rounded-lg overflow-hidden z-50 shadow-huge pointer-events-auto"
                                                         >
-                                                            {/* Share is always available */}
-                                                            <button
-                                                                onClick={handleShare}
-                                                                className="w-full px-4 py-3 flex items-center gap-3 text-xs text-smoke hover:bg-white/5 transition-colors border-b border-white/5"
-                                                            >
-                                                                <Share2 size={14} className="text-gold-film/60" />
-                                                                <span>공유하기</span>
+                                                            <button onClick={handleShare} className="w-full px-3 py-2 flex items-center gap-2 text-[10px] text-smoke hover:bg-white/5 transition-colors border-b border-white/5 text-left">
+                                                                <Share2 size={10} className="text-gold-film/60" />
+                                                                <span>SHARE REEL</span>
                                                             </button>
-
-                                                            {/* Second option depends on ownership */}
-                                                            {isOwner ? (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setIsMoreHorizontalOpen(false)
-                                                                        setIsEditOpen(true)
-                                                                    }}
-                                                                    className="w-full px-4 py-3 flex items-center gap-3 text-xs text-smoke hover:bg-white/5 transition-colors"
-                                                                >
-                                                                    <Pencil size={14} className="text-gold-film/60" />
-                                                                    <span>편집하기</span>
-                                                                </button>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setIsMoreHorizontalOpen(false)
-                                                                        alert('신고 기능은 준비 중입니다.')
-                                                                    }}
-                                                                    className="w-full px-4 py-3 flex items-center gap-3 text-xs text-red-400 hover:bg-white/5 transition-colors"
-                                                                >
-                                                                    <AlertTriangle size={14} className="text-red-400/60" />
-                                                                    <span>신고하기</span>
+                                                            {isOwner && (
+                                                                <button onClick={() => { setIsMoreHorizontalOpen(false); setIsEditOpen(true); }} className="w-full px-3 py-2 flex items-center gap-2 text-[10px] text-smoke hover:bg-white/5 transition-colors text-left">
+                                                                    <Pencil size={10} className="text-gold-film/60" />
+                                                                    <span>EDIT PRODUCTION</span>
                                                                 </button>
                                                             )}
                                                         </motion.div>
@@ -385,17 +337,14 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Glass Surface Highlight */}
-                                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.05] to-transparent pointer-events-none opacity-0 group-hover/ticket:opacity-100 transition-opacity duration-700" />
                                 </div>
                             </div>
                         </motion.div>
                     </div>
                 </section>
 
-                {/* Tabs System (Index Look) */}
-                <section className="space-y-0">
+                {/* Tabs System (Index Look) - Constrained for focused dossier feel */}
+                <section className="max-w-4xl mx-auto space-y-0">
                     <div className="flex items-end gap-1 px-4">
                         {tabs.map((tab) => {
                             const Icon = tab.icon
@@ -405,7 +354,7 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id as any)}
                                     className={`
-                                        relative px-8 py-3 rounded-t-sm transition-all duration-300 group overflow-hidden
+                                        relative px-4 sm:px-8 py-3 rounded-t-sm transition-all duration-300 group overflow-hidden
                                         ${isActive
                                             ? 'bg-velvet border-t border-l border-r border-gold-film/30 text-gold-film shadow-[0_-5px_20px_rgba(201,162,39,0.1)]'
                                             : 'bg-white/5 border-t border-l border-r border-white/5 text-smoke/60 hover:text-smoke hover:bg-white/10'
@@ -428,8 +377,8 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                         })}
                     </div>
 
-                    {/* Tab Content Area */}
-                    <div className="relative z-20 bg-velvet/80 backdrop-blur-xl border border-white/10 rounded-sm p-8 sm:p-12 shadow-huge film-border min-h-[500px]">
+                    {/* Tab Content Area - Slightly more compact on mobile */}
+                    <div className="relative z-20 bg-velvet/80 backdrop-blur-xl border border-white/10 rounded-sm p-4 sm:p-10 shadow-huge film-border min-h-[500px]">
                         <AnimatePresence mode="wait">
                             {activeTab === 'RECORD' && (
                                 <motion.div
@@ -441,14 +390,14 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h4 className="text-sm font-mono-technical text-smoke/40 tracking-[0.3em] uppercase underline decoration-gold-film/30 underline-offset-8">Production_Log</h4>
+                                            <h4 className="text-[10px] sm:text-xs font-mono-technical text-smoke/40 tracking-[0.3em] uppercase underline decoration-gold-film/30 underline-offset-8">Production_Log</h4>
                                         </div>
                                         <Button
                                             onClick={() => setIsAddRecordOpen(true)}
-                                            className="bg-gold-film/10 hover:bg-gold-film/20 text-gold-film border border-gold-film/30 gap-2"
+                                            className="h-8 sm:h-10 bg-gold-film/10 hover:bg-gold-film/20 text-gold-film border border-gold-film/30 gap-1 sm:gap-2 px-3 sm:px-4"
                                         >
-                                            <Camera size={16} />
-                                            <span>ADD FRAME</span>
+                                            <Camera size={14} className="sm:w-4 sm:h-4" />
+                                            <span className="text-[10px] sm:text-sm">ADD FRAME</span>
                                         </Button>
                                     </div>
                                     {timelineItems.length > 0 ? (
@@ -551,7 +500,7 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: 10 }}
                                 >
-                                    <RoadmapView bucketId={bucket.id} roadmap={bucket.roadmap} />
+                                    <RoadmapView bucketId={bucket.id} roadmap={bucket.roadmap} isOwner={isOwner} />
                                 </motion.div>
                             )}
 
@@ -563,10 +512,15 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId }:
                                     exit={{ opacity: 0, x: 10 }}
                                     className="space-y-8"
                                 >
-                                    <div className="p-8 border border-white/5 rounded-sm bg-white/[0.02] flex items-center justify-center min-h-[200px]">
-                                        <div className="text-center space-y-4">
-                                            <MessageSquare className="w-12 h-12 text-smoke/20 mx-auto" />
-                                            <p className="text-smoke italic font-light">리뷰 시스템 준비 중입니다...</p>
+                                    <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
+                                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-smoke/20">
+                                            <MessageSquare size={24} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h4 className="text-xl font-display text-white italic tracking-tight">"관객의 평을 기다리는 중입니다"</h4>
+                                            <p className="text-smoke/40 font-mono-technical text-[10px] tracking-[0.2em] uppercase">
+                                                THE REVIEW SYSTEM IS CURRENTLY UNDER PRODUCTION.
+                                            </p>
                                         </div>
                                     </div>
                                 </motion.div>
