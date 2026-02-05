@@ -24,6 +24,8 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
     const [caption, setCaption] = useState('')
     const [imageFile, setImageFile] = useState<File | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+    const [isConverting, setIsConverting] = useState(false)
+    const [conversionError, setConversionError] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [metadata, setMetadata] = useState<ImageMetadata | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -31,22 +33,88 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
     const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
-            setImageFile(file)
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setPreviewUrl(reader.result as string)
-            }
-            reader.readAsDataURL(file)
+            setConversionError(null)
+            let fileToProcess = file
 
-            // Extract Metadata
-            const extracted = await extractImageMetadata(file)
-            setMetadata(extracted)
+            // Check if it's a HEIC file (by type or extension)
+            const isHeic = file.type === 'image/heic' ||
+                file.type === 'image/heif' ||
+                file.name.toLowerCase().endsWith('.heic') ||
+                file.name.toLowerCase().endsWith('.heif')
+
+            if (isHeic) {
+                setIsConverting(true)
+                try {
+                    // Try client-side conversion first
+                    console.log('Starting HEIC conversion for:', file.name, 'Size:', file.size);
+
+                    const heic2anyModule = await import('heic2any')
+                    const heic2any = heic2anyModule.default || heic2anyModule
+
+                    const result = await (heic2any as any)({
+                        blob: file,
+                        toType: 'image/jpeg',
+                        quality: 0.7
+                    })
+
+                    const blob = Array.isArray(result) ? result[0] : result
+                    const fileName = file.name.replace(/\.(heic|heif)$/i, "") + ".jpg"
+                    fileToProcess = new File([blob], fileName, { type: 'image/jpeg' })
+                    const url = URL.createObjectURL(fileToProcess)
+                    setPreviewUrl(url)
+                    console.log('Client-side HEIC conversion successful');
+                } catch (clientErr: any) {
+                    console.warn('Client-side HEIC conversion failed, trying server-side:', clientErr)
+
+                    // Fallback to server-side preview generation
+                    try {
+                        const formData = new FormData()
+                        formData.append('file', file)
+
+                        const response = await fetch('/api/preview', {
+                            method: 'POST',
+                            body: formData
+                        })
+
+                        if (response.ok) {
+                            const data = await response.json()
+                            setPreviewUrl(data.previewUrl)
+                            console.log('Server-side preview generation successful');
+                        } else {
+                            throw new Error('Server preview failed')
+                        }
+                    } catch (serverErr) {
+                        console.warn('Server-side preview also failed:', serverErr)
+                        // Still allow upload - server will handle conversion
+                        setConversionError('미리보기를 생성할 수 없지만, 업로드 시 자동으로 변환됩니다.')
+                        // Create a placeholder preview URL anyway
+                        setPreviewUrl(null)
+                    }
+                } finally {
+                    setIsConverting(false)
+                }
+            } else {
+                // Non-HEIC image - use direct object URL
+                const url = URL.createObjectURL(fileToProcess)
+                setPreviewUrl(url)
+            }
+
+            setImageFile(fileToProcess)
+
+            // Extract Metadata from original file (better EXIF support if it works)
+            try {
+                const extracted = await extractImageMetadata(file)
+                setMetadata(extracted)
+            } catch (err) {
+                console.warn('Metadata extraction failed, proceeding without it:', err)
+                setMetadata(null)
+            }
         }
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!caption && !imageFile) return
+        if (isConverting || (!caption && !imageFile)) return
 
         setIsSubmitting(true)
         try {
@@ -60,6 +128,7 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
             // Reset and close
             setCaption('')
             setImageFile(null)
+            if (previewUrl) URL.revokeObjectURL(previewUrl)
             setPreviewUrl(null)
             setMetadata(null)
             onClose()
@@ -127,46 +196,78 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
                                     </label>
 
                                     <div
-                                        onClick={() => !previewUrl && fileInputRef.current?.click()}
+                                        onClick={() => !previewUrl && !imageFile && !isConverting && fileInputRef.current?.click()}
                                         className={`
                                             relative aspect-video rounded-sm border-2 border-dashed transition-all duration-300
-                                            ${previewUrl
+                                            ${(previewUrl || imageFile)
                                                 ? 'border-transparent'
                                                 : 'border-white/10 hover:border-gold-film/30 bg-white/[0.02] cursor-pointer'
                                             }
                                             flex flex-col items-center justify-center gap-2 overflow-hidden
+                                            ${isConverting ? 'cursor-wait opacity-50' : ''}
                                         `}
                                     >
-                                        {previewUrl ? (
+                                        {/* HEIC Conversion Loading Overlay */}
+                                        {isConverting && (
+                                            <div className="absolute inset-0 bg-void/60 z-20 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
+                                                <div className="w-6 h-6 border-2 border-gold-film/30 border-t-gold-film rounded-full animate-spin" />
+                                                <p className="text-[10px] font-mono-technical text-gold-film tracking-widest uppercase animate-pulse">Converting iPhone Photo...</p>
+                                            </div>
+                                        )}
+
+                                        {previewUrl || imageFile ? (
                                             <>
-                                                <Image src={previewUrl} alt="Preview" fill className="object-cover" />
-                                                <div className="absolute inset-0 bg-void/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                                    <Button
-                                                        type="button"
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            fileInputRef.current?.click()
-                                                        }}
-                                                        className="bg-void/80 hover:bg-void text-xs h-8"
-                                                    >
-                                                        <Upload size={14} className="mr-2" /> 교체
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setPreviewUrl(null)
-                                                            setImageFile(null)
-                                                        }}
-                                                        className="bg-red-950/80 hover:bg-red-950 text-red-200 text-xs h-8"
-                                                    >
-                                                        <Trash2 size={14} className="mr-2" /> 삭제
-                                                    </Button>
-                                                </div>
+                                                {previewUrl ? (
+                                                    <img
+                                                        src={previewUrl}
+                                                        alt="Preview"
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => (e.currentTarget.style.opacity = '0')}
+                                                    />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gold-film/10 to-void">
+                                                        <div className="w-16 h-16 rounded-full bg-gold-film/20 border border-gold-film/30 flex items-center justify-center mb-3">
+                                                            <Camera size={28} className="text-gold-film" />
+                                                        </div>
+                                                        <p className="text-smoke/60 font-display text-sm">{imageFile?.name}</p>
+                                                        <p className="text-[10px] font-mono-technical text-gold-film/60 uppercase tracking-widest mt-2">
+                                                            iPhone Photo Ready
+                                                        </p>
+                                                        <p className="text-[9px] font-mono-technical text-smoke/40 mt-1">
+                                                            미리보기 불가 - 업로드 시 자동 변환
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {!isConverting && (
+                                                    <div className="absolute inset-0 bg-void/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                fileInputRef.current?.click()
+                                                            }}
+                                                            className="bg-void/80 hover:bg-void text-xs h-8"
+                                                        >
+                                                            <Upload size={14} className="mr-2" /> 교체
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setPreviewUrl(null)
+                                                                setImageFile(null)
+                                                                setConversionError(null)
+                                                            }}
+                                                            className="bg-red-950/80 hover:bg-red-950 text-red-200 text-xs h-8"
+                                                        >
+                                                            <Trash2 size={14} className="mr-2" /> 삭제
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </>
                                         ) : (
                                             <>
@@ -175,11 +276,20 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
                                                 </div>
                                                 <div className="text-center">
                                                     <p className="text-smoke/60 font-display text-sm">프레임 업로드</p>
-                                                    <p className="text-[9px] font-mono-technical text-smoke/30 uppercase tracking-tighter mt-1">JPG, PNG 지원 (최대 10MB)</p>
+                                                    <p className="text-[9px] font-mono-technical text-smoke/30 uppercase tracking-tighter mt-1">JPG, PNG, HEIC 지원 (최대 10MB)</p>
                                                 </div>
                                             </>
                                         )}
                                     </div>
+
+                                    {conversionError && (
+                                        <div className="p-3 bg-gold-film/10 border border-gold-film/20 rounded-sm">
+                                            <p className="text-[10px] text-gold-film/80 font-medium leading-relaxed tracking-tight">
+                                                {conversionError}
+                                            </p>
+                                        </div>
+                                    )}
+
                                     <input
                                         ref={fileInputRef}
                                         type="file"

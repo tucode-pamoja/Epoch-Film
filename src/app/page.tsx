@@ -2,7 +2,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { HomeClient } from '@/components/dashboard/HomeClient'
-import { getUserStats } from './archive/actions'
+import { StarField } from '@/components/layout/StarField'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -20,23 +20,18 @@ export default async function HomePage() {
     .select('*')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-  const stats = await getUserStats()
-
   return (
-    <div className="min-h-screen bg-void p-6 sm:p-12 overflow-x-hidden selection:bg-gold-film/30">
-      <div className="fixed top-0 left-0 w-full h-[800px] bg-gradient-to-b from-darkroom to-transparent pointer-events-none" />
-      <div className="max-w-7xl mx-auto relative z-10 space-y-12 pt-8">
-        <header className="flex flex-col items-center text-center animate-fade-in-up">
-          <div className="font-mono-technical text-gold-film/60 tracking-[0.4em] mb-2 uppercase text-[10px]">제작 센터 (Production Center)</div>
-          <h1 className="text-5xl sm:text-7xl font-display tracking-tight text-celluloid">
-            My Epoch
-          </h1>
-        </header>
+    <div className="fixed inset-0 w-full h-full overflow-hidden bg-void selection:bg-gold-film/30 flex flex-col">
+      <StarField />
 
-        <main>
+
+
+
+      {/* Main Workspace - No Vertical Scroll */}
+      <div className="relative z-10 flex-1 overflow-hidden px-6 sm:px-12 flex flex-col pt-4">
+        <main className="max-w-7xl mx-auto w-full flex-1 flex flex-col">
           <HomeClient
             buckets={buckets || []}
-            userStats={stats || { level: 1, xp: 0, nextLevelXp: 500, streak: 0, completedDreams: 0, activeDreams: 0 }}
           />
         </main>
       </div>

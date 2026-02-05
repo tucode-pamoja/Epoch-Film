@@ -16,7 +16,7 @@ function SubmitButton() {
       disabled={pending}
       className="w-full h-14 rounded-sm bg-gradient-to-r from-gold-warm to-gold-film text-velvet hover:from-gold-highlight hover:to-gold-warm font-display text-lg shadow-[0_4px_20px_-5px_rgba(212,175,55,0.4)] transition-all transform active:scale-95"
     >
-      {pending ? '현상 중... (Developing)' : '필름 생성하기 (Create Reel)'}
+      {pending ? '현상 중... (Developing)' : 'Scene 생성하기 (Create Scene)'}
     </Button>
   )
 }
@@ -29,7 +29,7 @@ export default function NewBucketPage() {
     <div style={{ width: '100%', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2rem' }} className="bg-void">
       <div style={{ width: '100%', maxWidth: '640px' }} className="space-y-10">
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-display text-celluloid">새로운 필름 (New Reel)</h1>
+          <h1 className="text-4xl font-display text-celluloid">새로운 Scene (New Scene)</h1>
           <p className="text-smoke font-light text-sm">당신의 아카이브에 새로운 꿈을 기록하세요.</p>
         </div>
 
@@ -43,6 +43,24 @@ export default function NewBucketPage() {
                 placeholder="예: 발리에서 서핑 배우기"
                 className="bg-white/10 border-white/20 h-11 rounded-sm text-celluloid placeholder:text-white/30 focus:border-gold-film/60 font-display glass-warm shadow-inner"
               />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono-technical text-gold-warm/80 uppercase tracking-widest mb-2 ml-1">Scene 종류 (TYPE)</label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="relative cursor-pointer group">
+                  <input type="radio" name="sceneType" value="YEARLY" defaultChecked className="peer sr-only" />
+                  <div className="w-full h-11 flex items-center justify-center rounded-sm border border-white/10 bg-white/5 text-[10px] font-mono-technical text-smoke/60 peer-checked:bg-gold-film/10 peer-checked:border-gold-film/40 peer-checked:text-gold-film transition-all hover:bg-white/10">
+                    올해의 Scene
+                  </div>
+                </label>
+                <label className="relative cursor-pointer group">
+                  <input type="radio" name="sceneType" value="LIFE" className="peer sr-only" />
+                  <div className="w-full h-11 flex items-center justify-center rounded-sm border border-white/10 bg-white/5 text-[10px] font-mono-technical text-smoke/60 peer-checked:bg-gold-film/10 peer-checked:border-gold-film/40 peer-checked:text-gold-film transition-all hover:bg-white/10">
+                    My Epoch
+                  </div>
+                </label>
+              </div>
             </div>
 
             <div>

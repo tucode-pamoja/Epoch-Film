@@ -1,24 +1,25 @@
 'use client'
 
 import { Bucket } from '@/types'
-import { BucketCard } from '@/components/buckets/BucketCard'
+import { SceneCard } from '@/components/buckets/SceneCard'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
-import { LifeDashboard } from './LifeDashboard'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Film } from 'lucide-react'
 import Link from 'next/link'
-import { CinematicTimeline } from '@/components/buckets/CinematicTimeline'
 import { CompletionModal } from '@/components/archive/CompletionModal'
 import { completeBucket } from '@/app/archive/actions'
+import { clsx } from 'clsx'
 
-interface HomeClientProps {
+export interface HomeClientProps {
     buckets: Bucket[]
-    userStats: any // Using any for now to match LifeDashboard props
 }
 
-export function HomeClient({ buckets, userStats }: HomeClientProps) {
-    const [activeTab, setActiveTab] = useState<'YEAR' | 'LIFE' | 'DONE'>('YEAR')
+export function HomeClient({ buckets }: HomeClientProps) {
+    const [activeMainTab, setActiveMainTab] = useState<'YEAR' | 'LIFE'>('YEAR')
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRODUCTION' | 'ACHIEVED'>('ALL')
+    const [activeIndex, setActiveIndex] = useState(0)
     const [completingBucket, setCompletingBucket] = useState<Bucket | null>(null)
+    const carouselRef = useRef<HTMLDivElement>(null)
 
     const handleCompletionSubmit = async (data: { image?: File; caption: string }) => {
         if (!completingBucket) return
@@ -33,126 +34,234 @@ export function HomeClient({ buckets, userStats }: HomeClientProps) {
         setCompletingBucket(null)
     }
 
-    // Filtering Logic
-    const currentYear = new Date().getFullYear()
+    // Filtered Content
+    const displayedBuckets = useMemo(() => {
+        const currentYear = new Date().getFullYear()
+        let filtered = buckets
 
-    // 1. This Year: Buckets with target_date in current year OR created this year and not achieved
-    const yearBuckets = buckets.filter(b => {
-        if (b.status === 'ACHIEVED') return false
-        if (b.target_date) {
-            return new Date(b.target_date).getFullYear() === currentYear
+        if (activeMainTab === 'YEAR') {
+            // "올해의 Scenes": Strictly items with a target_date (set via the Yearly option)
+            filtered = buckets.filter(b => b.target_date !== null)
+        } else if (activeMainTab === 'LIFE') {
+            // "My Epoch": Strictly items with no target_date (Life-long goals)
+            filtered = buckets.filter(b => b.target_date === null)
         }
-        // Fallback: Created this year
-        return new Date(b.created_at).getFullYear() === currentYear
-    })
 
-    // 2. Life: All active buckets (excluding achieved, effectively the backlog)
-    const lifeBuckets = buckets.filter(b => b.status !== 'ACHIEVED')
-
-    // 3. Completed: Status is ACHIEVED
-    const completedBuckets = buckets.filter(b => b.status === 'ACHIEVED')
-
-    const getDisplayedBuckets = () => {
-        switch (activeTab) {
-            case 'YEAR': return yearBuckets
-            case 'LIFE': return lifeBuckets
-            case 'DONE': return completedBuckets
-            default: return []
+        if (statusFilter === 'PRODUCTION') {
+            filtered = filtered.filter(b => b.status !== 'ACHIEVED')
+        } else if (statusFilter === 'ACHIEVED') {
+            filtered = filtered.filter(b => b.status === 'ACHIEVED')
         }
-    }
+        return filtered
+    }, [buckets, activeMainTab, statusFilter])
 
-    const displayedBuckets = getDisplayedBuckets()
+    const showAddCard = statusFilter !== 'ACHIEVED'
+    const totalCarouselItems = displayedBuckets.length + (showAddCard ? 1 : 0)
+    const totalRealBuckets = displayedBuckets.length
 
-    const tabs = [
-        { id: 'YEAR', label: '올해의 버킷' },
-        { id: 'LIFE', label: '인생의 버킷' },
-        { id: 'DONE', label: '완료한 버킷' }
-    ]
+    // Navigation logic with strict clamping
+    const navigateTo = useCallback((index: number) => {
+        const target = Math.max(0, Math.min(index, totalCarouselItems - 1))
+        setActiveIndex(target)
+    }, [totalCarouselItems])
+
+    // Reset when navigation/filter changes
+    useEffect(() => {
+        setActiveIndex(0)
+    }, [activeMainTab, statusFilter])
+
+    // Safety sync
+    useEffect(() => {
+        if (activeIndex >= totalCarouselItems && totalCarouselItems > 0) {
+            setActiveIndex(totalCarouselItems - 1)
+        }
+    }, [totalCarouselItems, activeIndex])
+
+    // Wheel navigation
+    useEffect(() => {
+        const el = carouselRef.current
+        if (!el) return
+
+        let isWheeling = false
+        const handleWheel = (e: WheelEvent) => {
+            if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                e.preventDefault()
+                if (isWheeling) return
+
+                const threshold = 30
+                if (e.deltaX > threshold && activeIndex < totalCarouselItems - 1) {
+                    navigateTo(activeIndex + 1)
+                    isWheeling = true
+                    setTimeout(() => { isWheeling = false }, 250)
+                } else if (e.deltaX < -threshold && activeIndex > 0) {
+                    navigateTo(activeIndex - 1)
+                    isWheeling = true
+                    setTimeout(() => { isWheeling = false }, 250)
+                }
+            }
+        };
+        el.addEventListener('wheel', handleWheel, { passive: false })
+        return () => el.removeEventListener('wheel', handleWheel)
+    }, [activeIndex, totalCarouselItems, navigateTo])
+
+    const isAddCardFocused = activeIndex === totalRealBuckets && showAddCard
+
+    // Visual State Logic for Counter
+    const sequenceNumber = useMemo(() => {
+        if (isAddCardFocused) return '--'
+        // Clamp the display number to never exceed real bucket count
+        const num = Math.min(activeIndex + 1, totalRealBuckets)
+        return num.toString().padStart(2, '0')
+    }, [activeIndex, totalRealBuckets, isAddCardFocused])
+
+    // Layout Constants
+    const cardWidth = 280
+    const gap = 40
+    const totalStep = cardWidth + gap
 
     return (
-        <div className="space-y-12 pb-24">
-            {/* Dashboard Section */}
-            <section className="animate-fade-in-up">
-                <LifeDashboard userStats={userStats} />
-            </section>
-
-            {/* Timeline Section - Only show if there are completed buckets */}
-            {buckets.some(b => b.status === 'ACHIEVED') && (
-                <section className="space-y-6">
-                    <div className="flex items-center gap-4 font-mono-technical text-smoke ml-1">
-                        <Film className="w-4 h-4 text-gold-film" />
-                        <h2 className="text-[10px] tracking-widest uppercase">PRODUCTION_TIMELINE</h2>
-                        <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+        <div className="flex-1 flex flex-col min-h-0 relative select-none">
+            {/* 1. Header Navigation */}
+            <div className="flex-shrink-0 pt-2 pb-2 space-y-4 z-30">
+                <div className="flex items-center justify-center gap-4">
+                    <div className="flex items-center gap-1 p-1 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
+                        {['YEAR', 'LIFE'].map((tabId) => (
+                            <button
+                                key={tabId}
+                                onClick={() => setActiveMainTab(tabId as any)}
+                                className={clsx(
+                                    "px-8 py-2 rounded-full text-[10px] md:text-xs font-display transition-all duration-300",
+                                    activeMainTab === tabId ? 'bg-gold-film text-velvet font-bold scale-105 shadow-huge' : 'text-smoke/40 hover:text-smoke/70'
+                                )}
+                            >
+                                {tabId === 'YEAR' ? '올해의 Scenes' : 'My Epoch'}
+                            </button>
+                        ))}
                     </div>
-                    <CinematicTimeline buckets={buckets} />
-                </section>
-            )}
+                    <Link
+                        href="/archive/new"
+                        className="w-10 h-10 rounded-full bg-gold-film/10 border border-gold-film/30 flex items-center justify-center text-gold-film hover:bg-gold-film hover:text-velvet transition-all duration-300"
+                    >
+                        <Plus size={20} />
+                    </Link>
+                </div>
 
-            {/* Tabs Section */}
-            <section className="space-y-6">
-                <div className="flex items-center gap-1 p-1 bg-white/5 rounded-full w-fit mx-auto border border-white/10">
-                    {tabs.map((tab) => (
+                <div className="flex items-center justify-center gap-8">
+                    {['ALL', 'PRODUCTION', 'ACHIEVED'].map((subId) => (
                         <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`
-                px-6 py-2 rounded-full text-sm font-display transition-all
-                ${activeTab === tab.id
-                                    ? 'bg-gold-film text-velvet shadow-warm font-bold'
-                                    : 'text-smoke hover:text-celluloid'
-                                }
-              `}
+                            key={subId}
+                            onClick={() => setStatusFilter(subId as any)}
+                            className={clsx(
+                                "font-mono-technical text-[9px] tracking-[0.2em] uppercase transition-all relative py-1",
+                                statusFilter === subId ? 'text-gold-film font-bold' : 'text-smoke/40 hover:text-smoke/70'
+                            )}
                         >
-                            {tab.label}
+                            {subId === 'ALL' ? '전체 (ALL)' : subId === 'PRODUCTION' ? '제작 중 (PRODUCTION)' : '완료됨 (ACHIEVED)'}
+                            {statusFilter === subId && (
+                                <motion.div layoutId="sub-pill" className="absolute bottom-0 left-0 right-0 h-px bg-gold-film/60" />
+                            )}
                         </button>
                     ))}
                 </div>
+            </div>
 
-                {/* Content Section */}
-                <div className="min-h-[300px]">
-                    {displayedBuckets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-center border border-white/5 rounded-sm bg-white/5 border-dashed">
-                            <p className="text-smoke mb-4 font-light">아직 기록된 필름이 없습니다.</p>
-                            {activeTab !== 'DONE' && (
-                                <Link href="/archive/new" className="px-6 py-3 bg-white/10 hover:bg-gold-film/20 text-gold-film rounded-sm text-sm transition-colors flex items-center gap-2">
-                                    <Plus size={16} />
-                                    새로운 꿈 기록하기
-                                </Link>
-                            )}
-                        </div>
-                    ) : (
-                        <motion.div
-                            key={activeTab}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-                        >
-                            {displayedBuckets.map((bucket) => (
-                                <BucketCard
-                                    key={bucket.id}
-                                    bucket={bucket}
-                                    onComplete={() => setCompletingBucket(bucket)}
-                                />
-                            ))}
-                        </motion.div>
-                    )}
+            {/* 2. Main Cinematic Workspace */}
+            <div className="flex-1 min-h-0 relative flex flex-col items-center justify-center overflow-visible">
+                <div
+                    ref={carouselRef}
+                    className="w-full flex-1 flex items-center justify-start overflow-visible pb-48"
+                    style={{ paddingLeft: 'calc(50% - 140px)' }}
+                >
+                    <motion.div
+                        className="flex gap-10 items-center h-[50vh] min-h-[420px] cursor-grab active:cursor-grabbing"
+                        animate={{ x: -(activeIndex * totalStep) }}
+                        transition={{ type: "spring", stiffness: 120, damping: 20, mass: 1 }}
+                        drag="x"
+                        dragConstraints={{ left: -(totalCarouselItems - 1) * totalStep, right: 0 }}
+                        onDragEnd={(_, { offset, velocity }) => {
+                            const swipe = offset.x + velocity.x * 0.5
+                            if (swipe < -50 && activeIndex < totalCarouselItems - 1) navigateTo(activeIndex + 1)
+                            else if (swipe > 50 && activeIndex > 0) navigateTo(activeIndex - 1)
+                        }}
+                    >
+                        {totalCarouselItems === 0 ? (
+                            <div className="w-[280px] flex flex-col items-center justify-center gap-6 opacity-20">
+                                <Film size={48} strokeWidth={1} />
+                                <div className="space-y-1 text-center">
+                                    <p className="text-[10px] tracking-[0.4em] uppercase">No Scenes Found</p>
+                                    <p className="text-[8px] tracking-widest text-smoke/60">기록된 장면이 없습니다.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {displayedBuckets.map((bucket, index) => (
+                                    <div
+                                        key={bucket.id}
+                                        className="w-[280px] flex-shrink-0 h-full flex items-center justify-center"
+                                        onClick={() => navigateTo(index)}
+                                    >
+                                        <SceneCard
+                                            bucket={bucket}
+                                            isFocused={activeIndex === index}
+                                            onComplete={() => setCompletingBucket(bucket)}
+                                        />
+                                    </div>
+                                ))}
+
+                                {showAddCard && (
+                                    <div
+                                        className="w-[280px] flex-shrink-0 h-full flex items-center justify-center"
+                                        onClick={() => navigateTo(totalRealBuckets)}
+                                    >
+                                        <Link
+                                            href="/archive/new"
+                                            className={clsx(
+                                                "group aspect-[3/4] w-full flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all duration-700",
+                                                isAddCardFocused
+                                                    ? "border-gold-film/50 bg-gold-film/5 scale-105 opacity-100 shadow-huge"
+                                                    : "border-white/10 bg-white/5 scale-100 opacity-20 blur-[1px]"
+                                            )}
+                                        >
+                                            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:scale-105 transition-all">
+                                                <Plus size={32} className="text-smoke group-hover:text-gold-film transition-colors" />
+                                            </div>
+                                            <span className="mt-6 font-display text-[10px] tracking-[0.3em] uppercase text-smoke group-hover:text-gold-film">Add New Scene</span>
+                                        </Link>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </motion.div>
                 </div>
-            </section>
-
-            {/* Floating Action Button for Mobile / General */}
-            <div className="fixed bottom-24 right-6 z-40 sm:hidden">
-                <Link href="/archive/new" className="w-14 h-14 rounded-full bg-gold-film text-velvet shadow-lg flex items-center justify-center hover:scale-110 transition-transform">
-                    <Plus size={28} />
-                </Link>
             </div>
 
-            {/* Desktop Add Button (hidden on mobile since we have FAB) */}
-            <div className="hidden sm:flex justify-center mt-8">
-                <Link href="/archive/new" className="px-8 py-4 rounded-sm bg-gradient-to-r from-gold-warm/10 to-gold-film/10 border border-gold-film/30 text-gold-film hover:bg-gold-film/20 transition-all font-display">
-                    + 새로운 꿈 추가하기 (New Reel)
-                </Link>
-            </div>
+            {/* 3. SCENE Counter - Fixed for visibility */}
+            {totalRealBuckets > 0 && (
+                <div className="fixed bottom-[108px] left-0 right-0 flex flex-col items-center gap-5 z-[100] pointer-events-none">
+                    <div className="flex justify-center gap-3 pointer-events-auto">
+                        {[...Array(totalRealBuckets)].map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => navigateTo(i)}
+                                className={clsx(
+                                    "h-0.5 transition-all duration-500 rounded-full shadow-huge",
+                                    activeIndex === i ? "w-12 bg-gold-film" : "w-1.5 bg-white/20"
+                                )}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <span className="font-mono-technical text-[10px] tracking-[0.3em] text-gold-film/40">SCENE</span>
+                        <div className="font-mono text-sm tracking-[0.5em] text-gold-film flex items-center gap-3">
+                            <span className="font-bold">{sequenceNumber}</span>
+                            <span className="opacity-20">/</span>
+                            <span className="opacity-40">{totalRealBuckets.toString().padStart(2, '0')}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <CompletionModal
                 isOpen={!!completingBucket}
                 onClose={() => setCompletingBucket(null)}

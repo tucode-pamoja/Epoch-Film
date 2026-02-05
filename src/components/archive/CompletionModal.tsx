@@ -19,21 +19,49 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
     const [imageFile, setImageFile] = useState<File | null>(null)
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isConverting, setIsConverting] = useState(false)
+    const [conversionError, setConversionError] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
         setMounted(true)
     }, [])
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
-            setImageFile(file)
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string)
+            setConversionError(null)
+            let fileToProcess = file
+
+            const isHeic = file.type === 'image/heic' ||
+                file.type === 'image/heif' ||
+                file.name.toLowerCase().endsWith('.heic') ||
+                file.name.toLowerCase().endsWith('.heif')
+
+            if (isHeic) {
+                setIsConverting(true)
+                try {
+                    const heic2anyModule = await import('heic2any')
+                    const heic2any = heic2anyModule.default || heic2anyModule
+                    const result = await (heic2any as any)({
+                        blob: file,
+                        toType: 'image/jpeg',
+                        quality: 0.7
+                    })
+                    const blob = Array.isArray(result) ? result[0] : result
+                    const fileName = file.name.replace(/\.(heic|heif)$/i, "") + ".jpg"
+                    fileToProcess = new File([blob], fileName, { type: 'image/jpeg' })
+                } catch (err: any) {
+                    console.warn('Client-side HEIC conversion failed, will fallback to server-side conversion:', err)
+                    setConversionError('브라우저에서 이미지 미리보기를 생성할 수 없지만, 업로드 시 자동으로 변환됩니다.')
+                } finally {
+                    setIsConverting(false)
+                }
             }
-            reader.readAsDataURL(file)
+
+            setImageFile(fileToProcess)
+            const url = URL.createObjectURL(fileToProcess)
+            setImagePreview(url)
         }
     }
 
@@ -159,15 +187,37 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
                             </div>
                             {imagePreview ? (
                                 <div style={{ position: 'relative', height: '100px', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)', backgroundColor: '#141210' }}>
-                                    <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '2px', padding: '2px 6px', fontSize: '9px', cursor: 'pointer' }}>REMOVE</button>
+                                    <img
+                                        src={imagePreview}
+                                        alt="Preview"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => (e.currentTarget.style.opacity = '0')}
+                                    />
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: -1, opacity: 0.2 }}>
+                                        <Camera size={20} />
+                                    </div>
+                                    {!isSubmitting && !isConverting && (
+                                        <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '2px', padding: '2px 6px', fontSize: '9px', cursor: 'pointer' }}>REMOVE</button>
+                                    )}
                                 </div>
                             ) : (
-                                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60px', border: '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.3s' }}>
-                                    <Camera style={{ color: 'rgba(92, 85, 82, 0.4)', marginRight: '10px' }} size={20} />
-                                    <span style={{ fontSize: '11px', color: 'rgba(92, 85, 82, 0.6)', letterSpacing: '0.1em' }}>SELECT PHOTO</span>
-                                    <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
-                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60px', border: '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: '4px', cursor: isConverting ? 'wait' : 'pointer', transition: 'all 0.3s', opacity: isConverting ? 0.5 : 1 }}>
+                                        <Camera style={{ color: 'rgba(92, 85, 82, 0.4)', marginRight: '10px' }} size={20} />
+                                        <span style={{ fontSize: '11px', color: 'rgba(92, 85, 82, 0.6)', letterSpacing: '0.1em' }}>
+                                            {isConverting ? 'CONVERTING...' : 'SELECT PHOTO'}
+                                        </span>
+                                        <input type="file" accept="image/*" onChange={handleImageChange} disabled={isConverting} style={{ display: 'none' }} />
+                                    </label>
+                                    {isConverting && (
+                                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <div style={{ width: '16px', height: '16px', border: '2px solid rgba(201, 162, 39, 0.3)', borderTopColor: '#C9A227', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {conversionError && (
+                                <p style={{ color: '#ef4444', fontSize: '10px', marginTop: '4px' }}>{conversionError}</p>
                             )}
                         </div>
 
@@ -189,7 +239,7 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
                             <button onClick={() => handleSubmit(true)} disabled={isSubmitting} style={{ flex: 1, height: '38px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#smoke', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                 <FastForward size={14} /> 생략
                             </button>
-                            <button onClick={() => handleSubmit(false)} disabled={isSubmitting} style={{ flex: 2, height: '38px', backgroundColor: '#C9A227', border: 'none', color: '#0A0908', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
+                            <button onClick={() => handleSubmit(false)} disabled={isSubmitting || isConverting} style={{ flex: 2, height: '38px', backgroundColor: '#C9A227', border: 'none', color: '#0A0908', borderRadius: '4px', cursor: (isSubmitting || isConverting) ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 'bold', opacity: (isSubmitting || isConverting) ? 0.7 : 1 }}>
                                 {isSubmitting ? '진행 중...' : '기록 완료'}
                             </button>
                         </div>

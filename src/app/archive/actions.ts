@@ -3,6 +3,23 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import sharp from 'sharp'
+import convert from 'heic-convert'
+
+export async function getBucket(id: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('buckets')
+    .select('*, users(nickname, profile_image_url)')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Error fetching bucket:', error.message, error.details, error.hint)
+    return null
+  }
+  return data
+}
 
 export async function createBucket(formData: FormData) {
   const title = formData.get('title') as string
@@ -17,6 +34,9 @@ export async function createBucket(formData: FormData) {
   } catch (e) {
     console.error('Failed to parse tags', e)
   }
+
+  const sceneType = formData.get('sceneType') as string
+  const targetDate = sceneType === 'YEARLY' ? new Date(`${new Date().getFullYear()}-12-31`).toISOString() : null
 
   const supabase = await createClient()
 
@@ -42,6 +62,7 @@ export async function createBucket(formData: FormData) {
     tags, // Add tags here
     is_public: true, // Default to public for now or add to form
     is_pinned: false,
+    target_date: targetDate, // Set target_date based on type
   })
 
   if (error) {
@@ -72,19 +93,73 @@ export async function saveMemory(bucketId: string, formData: FormData) {
   const capturedAt = formData.get('captured_at') as string
 
   let imageUrl: string | null = null
+  const currentBucketId = bucketId
 
   // Handle Image Upload if present
   if (imageFile && imageFile.size > 0) {
     const fileExt = imageFile.name.split('.').pop()
-    const fileName = `${user.id}/${bucketId}-${Date.now()}.${fileExt}`
+    let fileName = `${user.id}/${currentBucketId}-${Date.now()}.${fileExt}`
+
+    // Convert File to Buffer
+    const arrayBuffer = await imageFile.arrayBuffer()
+    let buffer = Buffer.from(arrayBuffer)
+    let contentType = imageFile.type
+
+    // Server-side image processing with sharp & heic-convert
+    try {
+      // 1. Handle HEIC/HEIF conversion first using heic-convert (more reliable than sharp for this format)
+      const isHeic = fileExt?.toLowerCase() === 'heic' ||
+        fileExt?.toLowerCase() === 'heif' ||
+        contentType === 'image/heic' ||
+        contentType === 'image/heif';
+
+      if (isHeic) {
+        try {
+          const outputBuffer = await convert({
+            buffer: buffer as any,
+            format: 'JPEG',
+            quality: 1
+          });
+          buffer = Buffer.from(outputBuffer as any);
+          contentType = 'image/jpeg';
+          if (fileName.toLowerCase().endsWith('.heic')) fileName = fileName.replace(/\.heic$/i, '.jpg');
+          if (fileName.toLowerCase().endsWith('.heif')) fileName = fileName.replace(/\.heif$/i, '.jpg');
+        } catch (heicError) {
+          console.warn('heic-convert failed, trying sharp as fallback:', heicError);
+        }
+      }
+
+      // 2. Optimize/Process with sharp
+      const sharpImage = sharp(buffer)
+      const metadata = await sharpImage.metadata()
+      const format = metadata.format as any
+
+      if (format === 'heif' || format === 'heic' || fileExt?.toLowerCase() === 'heic') {
+        const processed = await sharpImage.jpeg({ quality: 80 }).toBuffer()
+        buffer = Buffer.from(processed as any)
+        contentType = 'image/jpeg'
+        if (fileName.toLowerCase().endsWith('.heic')) {
+          fileName = fileName.replace(/\.heic$/i, '.jpg')
+        }
+      } else {
+        const processed = await sharpImage.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+        buffer = Buffer.from(processed as any)
+        contentType = 'image/jpeg'
+      }
+    } catch (sharpError) {
+      console.warn('Image processing failed, proceeding with current buffer:', sharpError)
+    }
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('memories')
-      .upload(fileName, imageFile)
+      .upload(fileName, buffer, {
+        contentType: contentType,
+        upsert: true
+      })
 
     if (uploadError) {
-      console.error('Image upload error:', uploadError)
-      throw new Error('Failed to upload image')
+      console.error('Image upload error details:', uploadError)
+      throw new Error(`Failed to upload image: ${uploadError.message}. Please check if "memories" bucket exists in Supabase Storage and has proper RLS policies.`)
     }
 
     const { data: { publicUrl } } = supabase.storage
@@ -94,7 +169,7 @@ export async function saveMemory(bucketId: string, formData: FormData) {
   }
 
   const { error } = await supabase.from('memories').insert({
-    bucket_id: bucketId,
+    bucket_id: currentBucketId,
     user_id: user.id,
     media_url: imageUrl,
     caption: caption || '새로운 기록이 추가되었습니다.',
@@ -108,7 +183,7 @@ export async function saveMemory(bucketId: string, formData: FormData) {
     throw new Error('Failed to save memory')
   }
 
-  revalidatePath(`/archive/${bucketId}`)
+  revalidatePath(`/archive/${currentBucketId}`)
   revalidatePath('/archive')
   await updateQuestProgress('ADD_MEMORY')
 }
@@ -163,23 +238,75 @@ export async function completeBucket(bucketId: string, formData: FormData) {
   // Upload image to Supabase Storage if provided
   if (imageFile && imageFile.size > 0) {
     const fileExt = imageFile.name.split('.').pop()
-    const fileName = `${user.id}/${bucketId}-${Date.now()}.${fileExt}`
+    let fileName = `${user.id}/${bucketId}-${Date.now()}.${fileExt}`
+
+    // Convert to Buffer
+    const arrayBuffer = await imageFile.arrayBuffer()
+    let buffer = Buffer.from(arrayBuffer)
+    let contentType = imageFile.type
+
+    // Server-side image processing with sharp & heic-convert
+    try {
+      // 1. Handle HEIC/HEIF conversion first using heic-convert
+      const isHeic = fileExt?.toLowerCase() === 'heic' ||
+        fileExt?.toLowerCase() === 'heif' ||
+        contentType === 'image/heic' ||
+        contentType === 'image/heif';
+
+      if (isHeic) {
+        try {
+          const outputBuffer = await convert({
+            buffer: buffer as any,
+            format: 'JPEG',
+            quality: 1
+          });
+          buffer = Buffer.from(outputBuffer as any);
+          contentType = 'image/jpeg';
+          if (fileName.toLowerCase().endsWith('.heic')) fileName = fileName.replace(/\.heic$/i, '.jpg');
+          if (fileName.toLowerCase().endsWith('.heif')) fileName = fileName.replace(/\.heif$/i, '.jpg');
+        } catch (heicError) {
+          console.warn('heic-convert in completeBucket failed:', heicError);
+        }
+      }
+
+      // 2. Optimize/Process with sharp
+      const sharpImage = sharp(buffer)
+      const metadata = await sharpImage.metadata()
+      const format = metadata.format as any
+
+      if (format === 'heif' || format === 'heic' || fileExt?.toLowerCase() === 'heic') {
+        const processed = await sharpImage.jpeg({ quality: 80 }).toBuffer()
+        buffer = Buffer.from(processed as any)
+        contentType = 'image/jpeg'
+        if (fileName.toLowerCase().endsWith('.heic')) {
+          fileName = fileName.replace(/\.heic$/i, '.jpg')
+        }
+      } else {
+        const processed = await sharpImage.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+        buffer = Buffer.from(processed as any)
+        contentType = 'image/jpeg'
+      }
+    } catch (sharpError) {
+      console.warn('Image processing in completeBucket failed:', sharpError)
+    }
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('memories')
-      .upload(fileName, imageFile, {
+      .upload(fileName, buffer as any, {
+        contentType: contentType,
         cacheControl: '3600',
-        upsert: false,
+        upsert: true,
       })
 
     if (uploadError) {
       console.error('Image upload error:', uploadError)
-    } else {
-      const { data: { publicUrl } } = supabase.storage
-        .from('memories')
-        .getPublicUrl(uploadData.path)
-      imageUrl = publicUrl
+      throw new Error(`Failed to upload completion image: ${uploadError.message}`)
     }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('memories')
+      .getPublicUrl(uploadData.path)
+    imageUrl = publicUrl
   }
 
   // Create memory record ONLY if an image was uploaded
@@ -789,45 +916,82 @@ export async function claimQuestReward(questId: string) {
     .from('users')
     .update({ xp: (profile?.xp || 0) + xpReward })
     .eq('id', user.id)
-
   revalidatePath('/archive')
   return { success: true, xpReward }
 }
 
-export async function getPublicBuckets() {
+export async function getPublicBuckets(
+  page: number = 0,
+  limit: number = 12,
+  status?: string,
+  category?: string,
+  searchTerm?: string
+) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const from = page * limit
+  const to = from + limit - 1
+
+  // 1. First attempt with real DB schema (is_public column and users join)
+  let query = supabase
     .from('buckets')
-    .select('*, users(nickname, profile_image_url)')
+    .select('*, users!inner(nickname, profile_image_url)')
     .eq('is_public', true)
+
+  if (status) query = query.eq('status', status)
+  if (category && category !== 'ALL') query = query.eq('category', category)
+  if (searchTerm) {
+    query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+  }
+
+  const { data, error } = await query
     .order('created_at', { ascending: false })
+    .range(from, to)
 
   if (error) {
     console.warn('[DB Sync] Public buckets fetch failed, attempting legacy fallback:', error.message)
-    const { data: fallbackData } = await supabase
+
+    // 2. Legacy Fallback: Try fetching without the is_public column or complex join if they don't exist yet
+    let fallbackQuery = supabase
       .from('buckets')
       .select('*, users(nickname, profile_image_url)')
-      .limit(20)
+
+    if (status) fallbackQuery = fallbackQuery.eq('status', status)
+    if (category && category !== 'ALL') fallbackQuery = fallbackQuery.eq('category', category)
+    if (searchTerm) {
+      fallbackQuery = fallbackQuery.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+    }
+
+    const { data: fallbackData, error: fallbackError } = await fallbackQuery
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (fallbackError) {
+      console.error('[DB Error] Critical failure in public buckets fallback:', fallbackError.message)
+      return []
+    }
     return fallbackData || []
   }
   return data || []
 }
 
-export async function getHallOfFameBuckets() {
+export async function getHallOfFameBuckets(page: number = 0, limit: number = 10) {
   const supabase = await createClient()
+  const from = page * limit
+  const to = from + limit - 1
+
   const { data, error } = await supabase
     .from('buckets')
     .select('*, users(nickname, profile_image_url)')
     .eq('is_public', true)
     .order('tickets', { ascending: false })
-    .limit(10)
+    .range(from, to)
 
   if (error) {
     console.warn('[DB Sync] Hall of Fame fetch failed, attempting legacy fallback:', error.message)
     const { data: fallbackData } = await supabase
       .from('buckets')
       .select('*, users(nickname, profile_image_url)')
-      .limit(10)
+      .range(from, to)
     return fallbackData || []
   }
   return data || []
@@ -873,4 +1037,112 @@ export async function issueTicket(bucketId: string) {
   revalidatePath(`/archive/${bucketId}`)
 
   return { success: true }
+}
+
+export async function getComments(bucketId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('comments')
+    .select('*, users(nickname, profile_image_url)')
+    .eq('bucket_id', bucketId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching comments:', error.message, error.details, error.hint)
+    return []
+  }
+  return data || []
+}
+
+export async function createComment(bucketId: string, content: string, parentId?: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized' }
+
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({
+      bucket_id: bucketId,
+      user_id: user.id,
+      content,
+      parent_id: parentId
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating comment:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath(`/archive/${bucketId}`)
+  return { success: true, data }
+}
+
+export async function deleteComment(commentId: string, bucketId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', user.id)
+
+  if (error) {
+    console.error('Error deleting comment:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath(`/archive/${bucketId}`)
+  return { success: true }
+}
+
+export async function getNotifications() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('notifications')
+    .select(`
+      *,
+      actor:users!actor_id(nickname, profile_image_url),
+      bucket:buckets(title)
+    `)
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (error) {
+    console.error('Error fetching notifications:', error.message)
+    return []
+  }
+  return data || []
+}
+
+export async function markNotificationAsRead(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', id)
+
+  if (error) throw error
+  revalidatePath('/', 'layout')
+}
+
+export async function clearNotifications() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', user.id)
+
+  if (error) throw error
+  revalidatePath('/', 'layout')
 }

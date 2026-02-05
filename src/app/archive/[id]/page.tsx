@@ -1,13 +1,55 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import { BucketDetailClient } from '@/components/archive/BucketDetailClient'
+import { getComments, getBucket } from '@/app/archive/actions'
 
 interface PageProps {
   params: Promise<{ id: string }>
 }
 
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params
+
+  // Handle mock IDs for metadata
+  if (id.startsWith('exp-') || id.startsWith('h')) {
+    const targetId = id.startsWith('h') ? `exp-${id.slice(1)}` : id
+    const mock = EXPLORE_MOCK_DATA[targetId]
+    if (!mock) return { title: 'EPOCH FILM' }
+
+    const ogUrl = new URL(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/og`)
+    ogUrl.searchParams.set('title', mock.bucket.title)
+    ogUrl.searchParams.set('category', mock.bucket.category)
+    ogUrl.searchParams.set('nickname', mock.bucket.users?.nickname || 'Unknown Director')
+
+    return {
+      title: `${mock.bucket.title} | EPOCH FILM`,
+      description: mock.bucket.description,
+      openGraph: {
+        images: [ogUrl.toString()],
+      }
+    }
+  }
+
+  const bucket = await getBucket(id)
+  if (!bucket) return { title: 'EPOCH FILM' }
+
+  const ogUrl = new URL(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/og`)
+  ogUrl.searchParams.set('title', bucket.title)
+  ogUrl.searchParams.set('category', bucket.category)
+  ogUrl.searchParams.set('nickname', bucket.users?.nickname || 'Unknown Director')
+
+  return {
+    title: `${bucket.title} | EPOCH FILM`,
+    description: bucket.description,
+    openGraph: {
+      images: [ogUrl.toString()],
+    },
+  }
+}
+
 // Combined Mock Data for Explore/Demo purposes
-const EXPLORE_MOCK_DATA: Record<string, { bucket: any, memories: any[], letters: any[] }> = {
+const EXPLORE_MOCK_DATA: Record<string, { bucket: any, memories: any[], letters: any[], comments: any[] }> = {
   'exp-1': {
     bucket: {
       id: 'exp-1',
@@ -33,7 +75,8 @@ const EXPLORE_MOCK_DATA: Record<string, { bucket: any, memories: any[], letters:
       { id: 'm1', bucket_id: 'exp-1', media_url: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7', caption: '레이캬비크 도착! 첫 날부터 심상치 않은 하늘.', created_at: '2024-01-16T10:00:00Z' },
       { id: 'm2', bucket_id: 'exp-1', media_url: 'https://images.unsplash.com/photo-1476610182048-b716b8518aae', caption: '영하 20도에서의 기다림 끝에 찾아온 기적.', created_at: '2024-02-01T22:00:00Z' }
     ],
-    letters: []
+    letters: [],
+    comments: []
   },
   'exp-2': {
     bucket: {
@@ -59,7 +102,8 @@ const EXPLORE_MOCK_DATA: Record<string, { bucket: any, memories: any[], letters:
     memories: [
       { id: 'm3', bucket_id: 'exp-2', media_url: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f', caption: '드디어 첫 파도를 잡았습니다!', created_at: '2024-02-15T09:00:00Z' }
     ],
-    letters: []
+    letters: [],
+    comments: []
   },
   'exp-3': {
     bucket: {
@@ -85,7 +129,8 @@ const EXPLORE_MOCK_DATA: Record<string, { bucket: any, memories: any[], letters:
     memories: [
       { id: 'm4', bucket_id: 'exp-3', media_url: 'https://images.unsplash.com/photo-1552674605-4694559e5bc7', caption: '결승선 통과 1분 전. 심장이 터질 것 같아요.', created_at: '2023-12-05T14:00:00Z' }
     ],
-    letters: []
+    letters: [],
+    comments: []
   }
 }
 
@@ -113,6 +158,7 @@ export default async function BucketDetailPage({ params }: PageProps) {
         bucket={mockEntry.bucket}
         memories={mockEntry.memories}
         letters={mockEntry.letters}
+        comments={[]}
         currentUserId={user.id}
       />
     )
@@ -151,11 +197,15 @@ export default async function BucketDetailPage({ params }: PageProps) {
     .eq('bucket_id', id)
     .single()
 
+  // Fetch comments
+  const comments = await getComments(id)
+
   return (
     <BucketDetailClient
       bucket={bucket}
       memories={memories || []}
       letters={letters || []}
+      comments={comments || []}
       currentUserId={user.id}
       hasIssuedTicket={!!ticket}
     />

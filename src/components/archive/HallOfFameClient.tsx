@@ -4,13 +4,32 @@ import { motion } from 'framer-motion'
 import { Ticket, Trophy, Crown, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
+import { getHallOfFameBuckets } from '@/app/archive/actions'
+import { Loader2 } from 'lucide-react'
 
 interface HallOfFameClientProps {
     initialBuckets: any[]
 }
 
 export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
-    if (!initialBuckets || initialBuckets.length === 0) {
+    const fetchMore = async (page: number) => {
+        return await getHallOfFameBuckets(page + 1, 10)
+    }
+
+    const { items, loading, hasMore, loadMoreRef } = useInfiniteScroll(fetchMore, { pageSize: 10 })
+
+    // Seed initial items if hook items are empty (initially)
+    // Actually our hook doesn't take initial items. I should modify it or just use it.
+    // For simplicity, let's use the hook's items and treat initialBuckets as the starting point.
+
+    // Actually, the hook I wrote starts with page 0 and calls fetchFn(0).
+    // I should probably pass initial items to the hook.
+
+    // Let's adjust the displayed items to include initial ones.
+    const allItems = items.length > 0 ? [...initialBuckets, ...items] : initialBuckets
+
+    if (!allItems || allItems.length === 0) {
         return (
             <div className="text-center py-32 bg-darkroom/30 rounded-sm border border-white/5 backdrop-blur-xl">
                 <Sparkles className="mx-auto mb-6 text-gold-film/20 animate-pulse" size={48} />
@@ -20,9 +39,9 @@ export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
         )
     }
 
-    const first = initialBuckets[0]
-    const runnersUp = initialBuckets.slice(1, 3)
-    const honorableMentions = initialBuckets.slice(3)
+    const first = allItems[0]
+    const runnersUp = allItems.slice(1, 3)
+    const honorableMentions = allItems.slice(3)
 
     return (
         <div className="space-y-16 pb-32 w-full">
@@ -112,7 +131,12 @@ export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
                     <div className="space-y-4">
                         {honorableMentions.map((item, index) => (
                             <Link href={`/archive/${item.id}`} key={item.id} className="block">
-                                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-sm hover:bg-white/[0.05] transition-colors group">
+                                <motion.div
+                                    initial={{ opacity: 0, x: -10 }}
+                                    whileInView={{ opacity: 1, x: 0 }}
+                                    viewport={{ once: true }}
+                                    className="flex items-center justify-between p-4 bg-white/[0.02] rounded-sm hover:bg-white/[0.05] transition-colors group"
+                                >
                                     <div className="flex items-center gap-6">
                                         <span className="font-mono-technical text-smoke/50 w-6">{(index + 4).toString().padStart(2, '0')}</span>
                                         <div className="w-10 h-10 bg-darkroom rounded-sm overflow-hidden">
@@ -131,10 +155,16 @@ export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
                                         <Ticket size={12} />
                                         <span className="text-xs font-mono-technical">{item.tickets?.toLocaleString() || 0}</span>
                                     </div>
-                                </div>
+                                </motion.div>
                             </Link>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {hasMore && (
+                <div ref={loadMoreRef} className="py-10 flex justify-center">
+                    {loading && <Loader2 size={24} className="text-gold-film animate-spin" />}
                 </div>
             )}
         </div>

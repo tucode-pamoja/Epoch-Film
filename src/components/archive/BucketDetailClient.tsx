@@ -32,17 +32,20 @@ import { useRouter } from 'next/navigation'
 import { RoadmapView } from '@/components/ai/RoadmapView'
 import { Button } from '@/components/ui/Button'
 import { AddRecordModal } from '@/components/archive/AddRecordModal'
+import { CommentSection } from '@/components/archive/comments/CommentSection'
+import { ShareButton } from '@/components/archive/ShareButton'
 import { saveMemory, updateBucket, updateMemory, deleteMemory, setBucketThumbnail, issueTicket } from '@/app/archive/actions'
 
 interface BucketDetailClientProps {
     bucket: any
     memories: any[]
     letters: any[]
+    comments: any[]
     currentUserId: string
     hasIssuedTicket?: boolean
 }
 
-export function BucketDetailClient({ bucket, memories, letters, currentUserId, hasIssuedTicket: initialHasIssuedTicket = false }: BucketDetailClientProps) {
+export function BucketDetailClient({ bucket, memories, letters, comments, currentUserId, hasIssuedTicket: initialHasIssuedTicket = false }: BucketDetailClientProps) {
     const isOwner = currentUserId === bucket.user_id
     const [activeTab, setActiveTab] = useState<'RECORD' | 'ROADMAP' | 'COMMENTS'>('RECORD')
     const [isAddRecordOpen, setIsAddRecordOpen] = useState(false)
@@ -198,12 +201,14 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId, h
             </div>
 
             <div className="relative z-10 max-w-5xl w-full px-6 py-12 space-y-12">
-                {/* Back Link */}
-                <Link href="/" className="group inline-flex items-center gap-2 text-smoke hover:text-gold-film transition-colors">
-                    <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-                    <span className="font-mono-technical text-[10px] tracking-widest uppercase">CLOSE_PRODUCTION</span>
-                </Link>
-
+                {/* Back Link & Actions */}
+                <div className="flex items-center justify-between">
+                    <Link href="/" className="group inline-flex items-center gap-2 text-smoke hover:text-gold-film transition-colors">
+                        <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+                        <span className="font-mono-technical text-[10px] tracking-widest uppercase">CLOSE_PRODUCTION</span>
+                    </Link>
+                    <ShareButton title={bucket.title} url={`/archive/${bucket.id}`} />
+                </div>
                 {/* Cinematic Hero Section - Portrait Poster Style (Fitted & Proportional) */}
                 <section className="relative h-[70vh] sm:h-[85vh] aspect-[3/4] sm:aspect-[2/3] w-full max-w-[420px] mx-auto flex flex-col justify-between p-5 sm:p-8 rounded-lg overflow-hidden border border-white/10 shadow-huge group mb-12 sm:mb-24">
                     {/* Hero Background Layer */}
@@ -292,9 +297,13 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId, h
 
                                     {/* BOTTOM: METADATA GRID */}
                                     <div className="p-4 sm:p-5 grid grid-cols-2 gap-y-4 gap-x-2">
-                                        <div className="space-y-1">
-                                            <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Genre</p>
-                                            <p className="text-[10px] sm:text-[11px] font-display text-smoke font-medium tracking-widest truncate uppercase">{bucket.category || 'CINEMA'}</p>
+                                        <div className="space-y-1 col-span-2 sm:col-span-1">
+                                            <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Genre / Type</p>
+                                            <p className="text-[10px] sm:text-[11px] font-display text-smoke font-medium tracking-widest truncate uppercase">
+                                                {bucket.category || 'CINEMA'}
+                                                <span className="mx-2 text-white/10">|</span>
+                                                <span className="text-gold-film/80">{bucket.target_date ? 'Yearly Scene' : 'My Epoch'}</span>
+                                            </p>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Premiere</p>
@@ -510,19 +519,12 @@ export function BucketDetailClient({ bucket, memories, letters, currentUserId, h
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: 10 }}
-                                    className="space-y-8"
                                 >
-                                    <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
-                                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-smoke/20">
-                                            <MessageSquare size={24} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <h4 className="text-xl font-display text-white italic tracking-tight">"관객의 평을 기다리는 중입니다"</h4>
-                                            <p className="text-smoke/40 font-mono-technical text-[10px] tracking-[0.2em] uppercase">
-                                                THE REVIEW SYSTEM IS CURRENTLY UNDER PRODUCTION.
-                                            </p>
-                                        </div>
-                                    </div>
+                                    <CommentSection
+                                        bucketId={bucket.id}
+                                        comments={comments}
+                                        currentUserId={currentUserId}
+                                    />
                                 </motion.div>
                             )}
                         </AnimatePresence>

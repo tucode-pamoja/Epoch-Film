@@ -1,12 +1,11 @@
 'use client'
 
 import { Bucket } from '@/types'
-import { BucketCard } from './BucketCard'
+import { SceneCard } from './SceneCard'
 import { motion } from 'framer-motion'
 import { Star, Film } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { CinematicTimeline } from './CinematicTimeline'
 import { CompletionModal } from '@/components/archive/CompletionModal'
 import { completeBucket } from '@/app/archive/actions'
 
@@ -81,50 +80,70 @@ export function BucketListClient({ buckets }: BucketListClientProps) {
   }
 
   return (
-    <div className="space-y-20">
-      {/* Cinematic Timeline Section */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 font-mono-technical text-smoke ml-1">
-          <Film className="w-4 h-4 text-gold-film" />
-          <h2 className="text-[10px] tracking-widest uppercase">제작 타임라인 (PRODUCTION_TIMELINE)</h2>
-          <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* 1. Fixed Category Filtration Hub */}
+      <div className="flex-shrink-0 pt-2 pb-10">
+        <div className="flex flex-wrap gap-2 overflow-x-auto pb-4 no-scrollbar justify-center">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-mono-technical transition-all border ${selectedCategory === cat
+                ? 'bg-gold-film border-gold-film text-void shadow-warm scale-105 font-bold'
+                : 'bg-white/5 border-white/5 text-smoke/60 hover:border-white/10 hover:text-celluloid'
+                }`}
+            >
+              {cat === 'ALL' ? 'ARCHIVE_ALL' : cat}
+            </button>
+          ))}
         </div>
-        <CinematicTimeline buckets={buckets} />
-      </section>
-
-      {/* Category Filter */}
-      <div className="flex flex-wrap gap-3 overflow-x-auto pb-6 no-scrollbar">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-5 py-2 rounded-sm font-mono-technical transition-all border ${selectedCategory === cat
-              ? 'bg-gold-film border-gold-film text-void shadow-warm scale-105'
-              : 'bg-white/5 border-white/5 text-smoke hover:border-white/10 hover:text-celluloid'
-              }`}
-          >
-            {cat === 'ALL' ? '전체보기' : cat}
-          </button>
-        ))}
       </div>
 
-      <div className="space-y-24">
-        {/* Selected Sequence Section */}
-        {pinnedBuckets.length > 0 && (
-          <section className="space-y-8">
-            <div className="flex items-center gap-4 text-smoke font-mono-technical ml-1">
-              <Star className="w-4 h-4 text-gold-film" fill="currentColor" />
-              <h2>Featured Sequences</h2>
+      {/* 2. Internally Scrolling Sequence Catalog */}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        <div className="space-y-20">
+          {/* Selected Sequence Section */}
+          {pinnedBuckets.length > 0 && (
+            <section className="space-y-6">
+              <div className="flex items-center gap-4 text-smoke/40 font-mono-technical">
+                <Star className="w-3 h-3 text-gold-film" fill="currentColor" />
+                <h2 className="text-[10px] tracking-[0.3em] uppercase">Featured Sequences</h2>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+              </div>
+              <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              >
+                {pinnedBuckets.map((bucket) => (
+                  <SceneCard
+                    key={bucket.id}
+                    bucket={bucket}
+                    onComplete={() => setCompletingBucket(bucket)}
+                  />
+                ))}
+              </motion.div>
+            </section>
+          )}
+
+          {/* All Archive Section */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-4 text-smoke/40 font-mono-technical">
+              <div className="w-1.5 h-1.5 rounded-full bg-smoke/20" />
+              <h2 className="text-[10px] tracking-[0.3em] uppercase">Archive Catalog</h2>
+              <span className="text-gold-film/30 text-[9px]">({filteredBuckets.length} ENTRIES)</span>
               <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
             </div>
+
             <motion.div
               variants={container}
               initial="hidden"
               animate="show"
-              className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3"
+              className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
             >
-              {pinnedBuckets.map((bucket) => (
-                <BucketCard
+              {otherBuckets.map((bucket) => (
+                <SceneCard
                   key={bucket.id}
                   bucket={bucket}
                   onComplete={() => setCompletingBucket(bucket)}
@@ -132,36 +151,7 @@ export function BucketListClient({ buckets }: BucketListClientProps) {
               ))}
             </motion.div>
           </section>
-        )}
-
-        {/* All Archive Section */}
-        <section className="space-y-8">
-          <div className="flex items-center justify-between ml-1">
-            <div className="flex items-center gap-4 text-smoke font-mono-technical flex-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-smoke" />
-              <h2 className="text-lg">
-                Archive Catalogue
-              </h2>
-              <span className="text-smoke/40 font-mono-technical text-[10px]">({filteredBuckets.length} ENTRIES)</span>
-              <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
-            </div>
-          </div>
-
-          <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {otherBuckets.map((bucket) => (
-              <BucketCard
-                key={bucket.id}
-                bucket={bucket}
-                onComplete={() => setCompletingBucket(bucket)}
-              />
-            ))}
-          </motion.div>
-        </section>
+        </div>
       </div>
 
       <CompletionModal
