@@ -30,7 +30,7 @@ export function BadgeCelebration() {
   useEffect(() => {
     if (unlockedType && BADGE_DETAILS[unlockedType]) {
       setIsOpen(true)
-      
+
       // Trigger confetti
       const duration = 3 * 1000
       const animationEnd = Date.now() + duration
@@ -38,7 +38,7 @@ export function BadgeCelebration() {
 
       const random = (min: number, max: number) => Math.random() * (max - min) + min
 
-      const interval: any = setInterval(function() {
+      const interval: any = setInterval(function () {
         const timeLeft = animationEnd - Date.now()
 
         if (timeLeft <= 0) {
@@ -46,12 +46,12 @@ export function BadgeCelebration() {
         }
 
         const particleCount = 50 * (timeLeft / duration)
-        
+
         // since particles fall down, start a bit higher than random
         confetti({ ...defaults, particleCount, origin: { x: random(0.1, 0.3), y: Math.random() - 0.2 } })
         confetti({ ...defaults, particleCount, origin: { x: random(0.7, 0.9), y: Math.random() - 0.2 } })
       }, 250)
-      
+
       return () => clearInterval(interval)
     }
   }, [unlockedType])
@@ -73,60 +73,99 @@ export function BadgeCelebration() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={handleClose}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/90 backdrop-blur-xl"
         />
-        
+
+        {/* Cinematic Light Leak Background */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <motion.div
+            animate={{
+              opacity: [0.3, 0.5, 0.3],
+              scale: [1, 1.2, 1],
+              rotate: [0, 5, 0]
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-gold-film/10 blur-[120px] rounded-full"
+          />
+          <motion.div
+            animate={{
+              opacity: [0.2, 0.4, 0.2],
+              scale: [1.2, 1, 1.2],
+              rotate: [0, -5, 0]
+            }}
+            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+            className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-cyan-film/10 blur-[150px] rounded-full"
+          />
+        </div>
+
+        {/* Film Reel Animation */}
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="w-[800px] h-[800px] border-[40px] border-dashed border-white/20 rounded-full flex items-center justify-center"
+          >
+            <div className="w-[600px] h-[600px] border-[20px] border-dashed border-white/10 rounded-full" />
+          </motion.div>
+        </div>
+
         <motion.div
-          initial={{ opacity: 0, scale: 0.5, y: 50 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.8, y: 50 }}
-          className="relative w-full max-w-md overflow-hidden rounded-3xl bg-gradient-to-br from-[#1a1a1a] to-black border border-white/10 shadow-[0_0_50px_rgba(212,175,55,0.2)] p-8 text-center"
+          initial={{ opacity: 0, scale: 0.8, rotateX: -20 }}
+          animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+          exit={{ opacity: 0, scale: 0.8, rotateX: 20 }}
+          transition={{ type: "spring", damping: 15, stiffness: 100 }}
+          className="relative w-full max-w-lg overflow-hidden rounded-md bg-darkroom border border-gold-film/30 shadow-[0_0_100px_rgba(201,162,39,0.2)] p-12 text-center perspective-cinema"
         >
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent" />
-          
-          <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-primary/20 text-primary shadow-[0_0_30px_rgba(212,175,55,0.3)]">
-            <Trophy size={48} />
+          {/* Film Border Aesthetic */}
+          <div className="absolute inset-x-0 top-0 h-6 bg-void flex items-center justify-around px-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="w-4 h-3 bg-white/5 rounded-sm" />
+            ))}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-6 bg-void flex items-center justify-around px-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="w-4 h-3 bg-white/5 rounded-sm" />
+            ))}
           </div>
 
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-2xl font-bold text-white mb-2"
-          >
-            Badge Unlocked!
-          </motion.h2>
-
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-primary font-bold text-lg mb-4"
-          >
-            {badge.label}
-          </motion.p>
-
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="text-white/60 mb-8"
-          >
-            {badge.description}
-          </motion.p>
-
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="relative z-10"
           >
-            <Button 
+            <div className="mx-auto mb-8 flex h-32 w-32 items-center justify-center rounded-full bg-gold-film/10 text-gold-film shadow-[0_0_50px_rgba(201,162,39,0.3)] border border-gold-film/20">
+              <Trophy size={64} className="drop-shadow-[0_0_15px_rgba(201,162,39,0.5)]" />
+            </div>
+
+            <h2 className="text-sm font-mono-technical tracking-[0.4em] text-gold-film/60 mb-2 uppercase">
+              Premier Achievement
+            </h2>
+
+            <h1 className="text-4xl font-display font-bold text-white mb-4 tracking-tight uppercase">
+              {badge.label}
+            </h1>
+
+            <div className="h-px w-24 bg-gradient-to-r from-transparent via-gold-film/50 to-transparent mx-auto mb-6" />
+
+            <p className="text-lg text-white/70 font-display italic mb-10 max-w-xs mx-auto">
+              "{badge.description}"
+            </p>
+
+            <Button
               onClick={handleClose}
-              className="w-full rounded-full bg-white text-black hover:bg-white/90 font-bold"
+              className="px-10 py-6 rounded-none bg-gold-film text-void hover:bg-gold-highlight font-mono-technical tracking-widest text-xs transition-all duration-500 shadow-[0_10px_30px_rgba(201,162,39,0.3)]"
             >
-              Awesome!
+              CLOSE PREVIEW
             </Button>
           </motion.div>
+
+          {/* Dust Particles */}
+          <div className="dust-layer opacity-40">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="dust-particle" style={{ left: `${Math.random() * 100}%`, animationDuration: `${Math.random() * 5 + 5}s`, animationDelay: `${Math.random() * 5}s` }} />
+            ))}
+          </div>
         </motion.div>
       </div>
     </AnimatePresence>

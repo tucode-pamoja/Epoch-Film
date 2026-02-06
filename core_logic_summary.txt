@@ -1,0 +1,229 @@
+# Epoch-Film Core Business Logic Summary
+
+Included Files:
+1. src/types/index.ts (Domain Models)
+2. src/app/archive/actions.ts (Core Actions - Bucket, Memory, AI Roadmap)
+3. src/actions/bucket-actions.ts (Bucket Management)
+4. src/utils/media.ts (Media Metadata & Processing Utility)
+5. src/utils/supabase/server.ts (Supabase Server Client)
+6. src/middleware.ts (Session & Auth Middleware)
+
+---
+## 1. src/types/index.ts
+```typescript
+export type Profile = {
+  id: string
+  email: string
+  nickname: string | null
+  profile_image_url: string | null
+  mbti: string | null
+  xp: number
+  level: number
+  last_active_at: string
+  created_at: string
+}
+
+export type BucketStatus = 'DRAFT' | 'ACTIVE' | 'ACHIEVED'
+export type BucketCategory = 'TRAVEL' | 'SKILL' | 'HEALTH' | 'CULTURE' | 'FOOD' | 'OTHER'
+
+export interface Bucket {
+  id: string
+  user_id: string
+  title: string
+  description: string | null
+  category: string
+  status: BucketStatus
+  is_pinned: boolean
+  importance: number
+  tags: string[] | null
+  achieved: boolean
+  achieved_at: string | null
+  target_date: string | null
+  roadmap: any | null
+  thumbnail_url: string | null
+  is_public: boolean
+  tickets: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Memory {
+  id: string
+  bucket_id: string
+  user_id: string
+  caption: string | null
+  media_url: string | null
+  media_type: 'IMAGE' | 'VIDEO'
+  location_lat: number | null
+  location_lng: number | null
+  captured_at: string | null
+  created_at: string
+}
+
+export interface UserStats {
+  level: number
+  xp: number
+  nextLevelXp: number
+  streak: number
+  completedDreams: number
+  activeDreams: number
+}
+```
+
+---
+## 2. src/app/archive/actions.ts (Truncated for core logic)
+```typescript
+'use server'
+import { createClient } from '@/utils/supabase/server'
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+import sharp from 'sharp'
+import convert from 'heic-convert'
+
+export async function createBucket(formData: FormData) {
+  const title = formData.get('title') as string
+  const category = formData.get('category') as string
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase.from('buckets').insert({
+    user_id: user.id,
+    title,
+    category,
+    is_public: true,
+  })
+  revalidatePath('/archive')
+  redirect('/archive')
+}
+
+export async function saveMemory(bucketId: string, formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const imageFile = formData.get('image') as File | null
+  let imageUrl = null
+
+  if (imageFile && imageFile.size > 0) {
+    // Handle HEIC conversion and Sharp optimization
+    // (Omitted detailed processing logic for brevity)
+    // ...
+  }
+
+  await supabase.from('memories').insert({
+    bucket_id: bucketId,
+    user_id: user.id,
+    media_url: imageUrl,
+    caption: formData.get('caption'),
+  })
+  revalidatePath(`/archive/${bucketId}`)
+}
+
+export async function generateRoadmap(bucketId: string) {
+  const supabase = await createClient()
+  const { data: bucket } = await supabase.from('buckets').select('*').eq('id', bucketId).single()
+  
+  // AI Roadmap Generation (Groq/Gemini)
+  // ... (Prompts and API calls)
+  
+  await supabase.from('buckets').update({ roadmap: roadmapData }).eq('id', bucketId)
+  revalidatePath(`/archive/${bucketId}`)
+}
+```
+
+---
+## 3. src/actions/bucket-actions.ts
+```typescript
+'use server'
+import { createClient } from '@/utils/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export async function togglePin(bucketId: string, currentStatus: boolean) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { error } = await supabase
+    .from('buckets')
+    .update({ is_pinned: !currentStatus })
+    .eq('id', bucketId)
+    .eq('user_id', user.id)
+
+  revalidatePath('/archive')
+}
+```
+
+---
+## 4. src/utils/media.ts
+```typescript
+import EXIF from 'exif-js'
+
+export async function extractImageMetadata(file: File) {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/')) return resolve({ ... })
+        EXIF.getData(file as any, function () {
+            // Extract GPS Lat/Lng and DateTimeOriginal
+            // ...
+            resolve({ location_lat, location_lng, captured_at })
+        })
+    })
+}
+```
+
+---
+## 5. src/utils/supabase/server.ts
+```typescript
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export async function createClient() {
+  const cookieStore = await cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookies) => cookies.forEach(c => cookieStore.set(c.name, c.value, c.options))
+      },
+    }
+  )
+}
+```
+
+---
+## 6. src/middleware.ts
+```typescript
+import { type NextRequest } from 'next/server'
+import { updateSession } from '@/utils/supabase/middleware'
+
+export async function middleware(request: NextRequest) {
+  return await updateSession(request)
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+}
+```
+---
+## 7. Business Rules (Grand Chancellor's Decree)
+
+### 7.1 Tickets & Interaction
+- **Daily Tickets**: Users receive 5 tickets daily (Reset at 00:00 UTC).
+- **Issuing Tickets**:
+  - Costs 1 Daily Ticket.
+  - Reward (Issuer): +5 XP.
+  - Reward (Owner): +20 XP.
+- **Comments**:
+  - Cost: Free.
+  - Reward (Commenter): +10 XP (Limit 5/day).
+  - Reward (Owner): +2 XP.
+
+### 7.2 AI Roadmap
+- **Accessibility**: Currently free.
+- **Goal**: Encourage users to use AI for better planning.
+
+### 7.3 Leveling System
+- **Level Formula**: `Math.floor(totalXp / 500) + 1`
+- **Next Level**: `(Level) * 500`

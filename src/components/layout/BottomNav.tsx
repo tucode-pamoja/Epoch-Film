@@ -56,7 +56,7 @@ export function BottomNav() {
 
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-6 pt-2 px-4 pointer-events-none">
-            <div className="pointer-events-auto bg-velvet/80 backdrop-blur-xl border border-white/10 rounded-full px-6 py-4 shadow-2xl flex items-center gap-8 md:gap-12 film-border">
+            <div className="pointer-events-auto bg-velvet/80 backdrop-blur-xl border border-white/10 rounded-full px-4 sm:px-6 py-3 sm:py-4 shadow-2xl flex items-center gap-4 sm:gap-8 md:gap-12 film-border">
                 {navItems.map((item) => {
                     const active = isActive(item.href)
 

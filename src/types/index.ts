@@ -6,12 +6,14 @@ export type Profile = {
   mbti: string | null
   xp: number
   level: number
+  daily_tickets: number
+  last_ticket_reset_at: string
   last_active_at: string
   created_at: string
 }
 
 export type BucketStatus = 'DRAFT' | 'ACTIVE' | 'ACHIEVED'
-export type BucketCategory = 'TRAVEL' | 'SKILL' | 'HEALTH' | 'CULTURE' | 'FOOD' | 'OTHER'
+export type BucketCategory = 'TRAVEL' | 'GROWTH' | 'CAREER' | 'LOVE' | 'HEALTH' | 'CULTURE' | 'FOOD' | 'OTHER'
 
 export interface Bucket {
   id: string

@@ -1,13 +1,13 @@
-'use client'
-
-import { Bucket } from '@/types'
+import { Bucket, BucketStatus } from '@/types'
 import { SceneCard } from './SceneCard'
-import { motion } from 'framer-motion'
-import { Star, Film } from 'lucide-react'
-import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Star, Loader2 } from 'lucide-react'
+import { useState, useOptimistic, useTransition } from 'react'
 import { Button } from '@/components/ui/Button'
 import { CompletionModal } from '@/components/archive/CompletionModal'
 import { completeBucket } from '@/app/archive/actions'
+import { togglePin as togglePinAction } from '@/actions/bucket-actions'
+import { toast } from 'sonner'
 
 interface BucketListClientProps {
   buckets: Bucket[]
@@ -16,8 +16,31 @@ interface BucketListClientProps {
 export function BucketListClient({ buckets }: BucketListClientProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL')
   const [completingBucket, setCompletingBucket] = useState<Bucket | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const [optimisticBuckets, addOptimisticAction] = useOptimistic(
+    buckets,
+    (state, action: { type: 'PIN' | 'STATUS', id: string, status?: BucketStatus }) => {
+      return state.map((b) => {
+        if (b.id !== action.id) return b
+        if (action.type === 'PIN') return { ...b, is_pinned: !b.is_pinned }
+        if (action.type === 'STATUS') return { ...b, status: action.status || b.status }
+        return b
+      })
+    }
+  )
 
   const categories = ['ALL', 'TRAVEL', 'GROWTH', 'CAREER', 'LOVE', 'FOOD', 'OTHER']
+
+  const handleTogglePin = async (id: string, currentStatus: boolean) => {
+    startTransition(async () => {
+      addOptimisticAction({ type: 'PIN', id })
+      const result = await togglePinAction(id, currentStatus)
+      if (result?.error) {
+        toast.error(result.error)
+      }
+    })
+  }
 
   const handleCompletionSubmit = async (data: { image?: File; caption: string }) => {
     if (!completingBucket) return
@@ -28,12 +51,22 @@ export function BucketListClient({ buckets }: BucketListClientProps) {
       formData.append('image', data.image)
     }
 
-    await completeBucket(completingBucket.id, formData)
+    const bucketId = completingBucket.id
     setCompletingBucket(null)
+
+    startTransition(async () => {
+      addOptimisticAction({ type: 'STATUS', id: bucketId, status: 'ACHIEVED' })
+      try {
+        await completeBucket(bucketId, formData)
+        toast.success("Scene achieved successfully!")
+      } catch (error) {
+        toast.error("Failed to complete scene")
+      }
+    })
   }
 
   if (!buckets?.length) {
-    // ... existing code ...
+    // ... same as before ...
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center animate-fade-in-up">
         <div className="relative w-24 h-32 bg-darkroom rounded-sm film-border shadow-deep flex items-center justify-center mb-10 group overflow-hidden">
@@ -63,8 +96,8 @@ export function BucketListClient({ buckets }: BucketListClientProps) {
   }
 
   const filteredBuckets = selectedCategory === 'ALL'
-    ? buckets
-    : buckets.filter(b => b.category?.toUpperCase() === selectedCategory)
+    ? optimisticBuckets
+    : optimisticBuckets.filter(b => b.category?.toUpperCase() === selectedCategory)
 
   const pinnedBuckets = filteredBuckets.filter(b => b.is_pinned)
   const otherBuckets = filteredBuckets.filter(b => !b.is_pinned)
@@ -80,79 +113,109 @@ export function BucketListClient({ buckets }: BucketListClientProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* 1. Fixed Category Filtration Hub */}
-      <div className="flex-shrink-0 pt-2 pb-10">
-        <div className="flex flex-wrap gap-2 overflow-x-auto pb-4 no-scrollbar justify-center">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-mono-technical transition-all border ${selectedCategory === cat
-                ? 'bg-gold-film border-gold-film text-void shadow-warm scale-105 font-bold'
-                : 'bg-white/5 border-white/5 text-smoke/60 hover:border-white/10 hover:text-celluloid'
-                }`}
-            >
-              {cat === 'ALL' ? 'ARCHIVE_ALL' : cat}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+      <AnimatePresence>
+        {isPending && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }}
+            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-void/10 pointer-events-none"
+          >
+            <div className="bg-void/80 backdrop-blur-xl border border-gold-film/20 rounded-full px-6 py-3 flex items-center gap-3 shadow-huge">
+              <Loader2 className="w-4 h-4 text-gold-film animate-spin" />
+              <span className="font-mono-technical text-[10px] text-gold-film tracking-[0.3em] uppercase">Processing_Scene...</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* 2. Internally Scrolling Sequence Catalog */}
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
-        <div className="space-y-20">
-          {/* Selected Sequence Section */}
-          {pinnedBuckets.length > 0 && (
+      <motion.div
+        animate={{
+          filter: isPending ? 'blur(4px) grayscale(0.5)' : 'blur(0px) grayscale(0)',
+          opacity: isPending ? 0.7 : 1,
+          scale: isPending ? 0.98 : 1
+        }}
+        transition={{ duration: 0.5 }}
+        className="flex-1 flex flex-col min-h-0"
+      >
+        {/* 1. Fixed Category Filtration Hub */}
+        <div className="flex-shrink-0 pt-2 pb-10">
+          <div className="flex flex-wrap gap-2 overflow-x-auto pb-4 no-scrollbar justify-center">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-mono-technical transition-all border ${selectedCategory === cat
+                  ? 'bg-gold-film border-gold-film text-void shadow-warm scale-105 font-bold'
+                  : 'bg-white/5 border-white/5 text-smoke/60 hover:border-white/10 hover:text-celluloid'
+                  }`}
+              >
+                {cat === 'ALL' ? 'ARCHIVE_ALL' : cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 2. Internally Scrolling Sequence Catalog */}
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+          <div className="space-y-20">
+            {/* Selected Sequence Section */}
+            {pinnedBuckets.length > 0 && (
+              <section className="space-y-6">
+                <div className="flex items-center gap-4 text-smoke/40 font-mono-technical">
+                  <Star className="w-3 h-3 text-gold-film" fill="currentColor" />
+                  <h2 className="text-[10px] tracking-[0.3em] uppercase">Featured Sequences</h2>
+                  <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+                </div>
+                <motion.div
+                  variants={container}
+                  initial="hidden"
+                  animate="show"
+                  className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                >
+                  {pinnedBuckets.map((bucket) => (
+                    <SceneCard
+                      key={bucket.id}
+                      bucket={bucket}
+                      onComplete={() => setCompletingBucket(bucket)}
+                      onTogglePin={() => handleTogglePin(bucket.id, bucket.is_pinned)}
+                      isPending={isPending}
+                    />
+                  ))}
+                </motion.div>
+              </section>
+            )}
+
+            {/* All Archive Section */}
             <section className="space-y-6">
               <div className="flex items-center gap-4 text-smoke/40 font-mono-technical">
-                <Star className="w-3 h-3 text-gold-film" fill="currentColor" />
-                <h2 className="text-[10px] tracking-[0.3em] uppercase">Featured Sequences</h2>
+                <div className="w-1.5 h-1.5 rounded-full bg-smoke/20" />
+                <h2 className="text-[10px] tracking-[0.3em] uppercase">Archive Catalog</h2>
+                <span className="text-gold-film/30 text-[9px]">({filteredBuckets.length} ENTRIES)</span>
                 <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
               </div>
+
               <motion.div
                 variants={container}
                 initial="hidden"
                 animate="show"
                 className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
               >
-                {pinnedBuckets.map((bucket) => (
+                {otherBuckets.map((bucket) => (
                   <SceneCard
                     key={bucket.id}
                     bucket={bucket}
                     onComplete={() => setCompletingBucket(bucket)}
+                    onTogglePin={() => handleTogglePin(bucket.id, bucket.is_pinned)}
+                    isPending={isPending}
                   />
                 ))}
               </motion.div>
             </section>
-          )}
-
-          {/* All Archive Section */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-4 text-smoke/40 font-mono-technical">
-              <div className="w-1.5 h-1.5 rounded-full bg-smoke/20" />
-              <h2 className="text-[10px] tracking-[0.3em] uppercase">Archive Catalog</h2>
-              <span className="text-gold-film/30 text-[9px]">({filteredBuckets.length} ENTRIES)</span>
-              <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
-            </div>
-
-            <motion.div
-              variants={container}
-              initial="hidden"
-              animate="show"
-              className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-            >
-              {otherBuckets.map((bucket) => (
-                <SceneCard
-                  key={bucket.id}
-                  bucket={bucket}
-                  onComplete={() => setCompletingBucket(bucket)}
-                />
-              ))}
-            </motion.div>
-          </section>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
       <CompletionModal
         isOpen={!!completingBucket}

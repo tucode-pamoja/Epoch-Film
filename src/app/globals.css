@@ -131,10 +131,10 @@ h1 {
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  opacity: 0.03;
-  background-image: url('https://www.transparenttextures.com/patterns/graphy-dark.png');
-  animation: grain 8s steps(10) infinite;
+  opacity: 0.15;
   mix-blend-mode: overlay;
+  background-image: url('/textures/film-noise.svg');
+  filter: contrast(150%) brightness(100%);
 }
 
 .vintage-overlay {
@@ -142,8 +142,7 @@ h1 {
   inset: 0;
   pointer-events: none;
   z-index: 9998;
-  background: rgba(201, 162, 39, 0.03);
-  /* Subtle Sepia */
+  background: radial-gradient(circle at center, transparent 0%, rgba(201, 162, 39, 0.05) 100%);
   mix-blend-mode: soft-light;
 }
 
@@ -255,9 +254,9 @@ h1 {
   pointer-events: none;
   z-index: 100;
   background: radial-gradient(ellipse at center,
-      transparent 0%,
-      transparent 50%,
-      rgba(10, 9, 8, 0.6) 100%);
+      transparent 20%,
+      rgba(10, 9, 8, 0.4) 70%,
+      rgba(10, 9, 8, 0.8) 100%);
 }
 
 .aspect-cinematic {
@@ -343,6 +342,7 @@ h1 {
     transform: translateY(-10vh) translateX(20px);
   }
 }
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

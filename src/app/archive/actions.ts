@@ -78,12 +78,14 @@ export async function createBucket(formData: FormData) {
 export async function saveMemory(bucketId: string, formData: FormData) {
   const supabase = await createClient()
 
+  console.log(`[SAVE_MEMORY_START] Bucket ID: ${bucketId}`);
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login')
+    return { success: false, error: '로그인이 필요합니다.', code: 'UNAUTHORIZED' }
   }
 
   const caption = formData.get('caption') as string
@@ -97,8 +99,13 @@ export async function saveMemory(bucketId: string, formData: FormData) {
 
   // Handle Image Upload if present
   if (imageFile && imageFile.size > 0) {
+    // Check file size (max 20MB for processing)
+    if (imageFile.size > 20 * 1024 * 1024) {
+      return { success: false, error: '파일 용량이 너무 큽니다. (최대 20MB)', code: 'FILE_TOO_LARGE' }
+    }
+
     const fileExt = imageFile.name.split('.').pop()
-    let fileName = `${user.id}/${currentBucketId}-${Date.now()}.${fileExt}`
+    let fileName = `${user.id}/${currentBucketId}-${Date.now()}` // Extension will be .webp
 
     // Convert File to Buffer
     const arrayBuffer = await imageFile.arrayBuffer()
@@ -107,47 +114,58 @@ export async function saveMemory(bucketId: string, formData: FormData) {
 
     // Server-side image processing with sharp & heic-convert
     try {
-      // 1. Handle HEIC/HEIF conversion first using heic-convert (more reliable than sharp for this format)
       const isHeic = fileExt?.toLowerCase() === 'heic' ||
         fileExt?.toLowerCase() === 'heif' ||
         contentType === 'image/heic' ||
-        contentType === 'image/heif';
+        contentType === 'image/heif' ||
+        contentType === 'application/octet-stream';
 
       if (isHeic) {
         try {
+          console.log(`[IMAGE_PROCESS] Attempting HEIC conversion for user: ${user.id}, size: ${imageFile.size}`);
           const outputBuffer = await convert({
             buffer: buffer as any,
             format: 'JPEG',
             quality: 1
           });
           buffer = Buffer.from(outputBuffer as any);
-          contentType = 'image/jpeg';
-          if (fileName.toLowerCase().endsWith('.heic')) fileName = fileName.replace(/\.heic$/i, '.jpg');
-          if (fileName.toLowerCase().endsWith('.heif')) fileName = fileName.replace(/\.heif$/i, '.jpg');
-        } catch (heicError) {
-          console.warn('heic-convert failed, trying sharp as fallback:', heicError);
+        } catch (heicError: any) {
+          console.error('[HEIC_CONVERSION_FAILED] Error converting HEIC to JPEG. Falling back to sharp directly.', {
+            error: heicError.message,
+            userId: user.id,
+            fileName: imageFile.name
+          });
         }
       }
 
-      // 2. Optimize/Process with sharp
-      const sharpImage = sharp(buffer)
-      const metadata = await sharpImage.metadata()
-      const format = metadata.format as any
+      // Optimize/Process with sharp: WebP conversion & Resizing
+      // Using { failOn: 'none' } and ensuring we only take the first page to avoid "Failed to add frame"
+      const sharpImage = sharp(buffer, { failOn: 'none', page: 0 })
+      sharpImage.rotate()
+      sharpImage.flatten({ background: { r: 28, g: 26, b: 24 } })
 
-      if (format === 'heif' || format === 'heic' || fileExt?.toLowerCase() === 'heic') {
-        const processed = await sharpImage.jpeg({ quality: 80 }).toBuffer()
-        buffer = Buffer.from(processed as any)
-        contentType = 'image/jpeg'
-        if (fileName.toLowerCase().endsWith('.heic')) {
-          fileName = fileName.replace(/\.heic$/i, '.jpg')
-        }
-      } else {
-        const processed = await sharpImage.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
-        buffer = Buffer.from(processed as any)
-        contentType = 'image/jpeg'
-      }
-    } catch (sharpError) {
-      console.warn('Image processing failed, proceeding with current buffer:', sharpError)
+      sharpImage.resize(1600, null, {
+        withoutEnlargement: true,
+        fit: 'inside'
+      })
+
+      // Convert to WebP
+      const processed = await sharpImage.webp({
+        quality: 85,
+        effort: 6,
+        smartSubsample: true
+      }).toBuffer()
+
+      buffer = Buffer.from(processed as any)
+      contentType = 'image/webp'
+      fileName = `${fileName}.webp`
+
+    } catch (imageError: any) {
+      console.error('[IMAGE_PROCESSING_CRITICAL] Image pipeline failed:', {
+        error: imageError.message,
+        userId: user.id
+      });
+      // Fallback: we'll try to upload original buffer, hoping storage allows it
     }
 
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -158,8 +176,12 @@ export async function saveMemory(bucketId: string, formData: FormData) {
       })
 
     if (uploadError) {
-      console.error('Image upload error details:', uploadError)
-      throw new Error(`Failed to upload image: ${uploadError.message}. Please check if "memories" bucket exists in Supabase Storage and has proper RLS policies.`)
+      console.error('SERVER_UPLOAD_FAILURE:', {
+        details: uploadError,
+        userId: user.id,
+        fileName
+      })
+      return { success: false, error: '파일 업로드에 실패했습니다.', code: 'STORAGE_UPLOAD_ERROR' }
     }
 
     const { data: { publicUrl } } = supabase.storage
@@ -168,24 +190,70 @@ export async function saveMemory(bucketId: string, formData: FormData) {
     imageUrl = publicUrl
   }
 
+  // Final check: if an image was provided but we have no URL, something went wrong
+  if (imageFile && imageFile.size > 0 && !imageUrl) {
+    return { success: false, error: '이미지 주소 생성에 실패했습니다.', code: 'URL_GENERATION_FAILED' }
+  }
+
+  console.log(`[DB_INSERT_START] Saving memory to bucket: ${currentBucketId}, user: ${user.id}`);
+
+  // Parse location values safely, ensuring NaN never reaches the DB
+  const parsedLat = locationLat ? parseFloat(locationLat) : null
+  const parsedLng = locationLng ? parseFloat(locationLng) : null
+  const safeLat = parsedLat !== null && !Number.isNaN(parsedLat) ? parsedLat : null
+  const safeLng = parsedLng !== null && !Number.isNaN(parsedLng) ? parsedLng : null
+
   const { error } = await supabase.from('memories').insert({
     bucket_id: currentBucketId,
     user_id: user.id,
     media_url: imageUrl,
     caption: caption || '새로운 기록이 추가되었습니다.',
-    location_lat: locationLat ? parseFloat(locationLat) : null,
-    location_lng: locationLng ? parseFloat(locationLng) : null,
+    location_lat: safeLat,
+    location_lng: safeLng,
     captured_at: capturedAt || null,
   })
 
   if (error) {
-    console.error('Error saving memory:', error)
-    throw new Error('Failed to save memory')
+    console.error('Error saving memory to DB:', {
+      error: error.message,
+      details: error.details,
+      code: error.code,
+      userId: user.id,
+      bucketId: currentBucketId
+    })
+    return {
+      success: false,
+      error: '메모리 저장 중 서버 오류가 발생했습니다. (DB Insert 실패)',
+      code: 'DATABASE_INSERT_ERROR',
+      details: error.message
+    }
   }
 
+  // Auto-set thumbnail if it's the first memory (or if thumbnail is missing)
+  if (imageUrl) {
+    const { data: bucketData } = await supabase
+      .from('buckets')
+      .select('thumbnail_url')
+      .eq('id', currentBucketId)
+      .single()
+
+    if (bucketData && !bucketData.thumbnail_url) {
+      console.log(`[AUTO_THUMBNAIL] Setting initial thumbnail for bucket ${currentBucketId}`)
+      await supabase
+        .from('buckets')
+        .update({ thumbnail_url: imageUrl })
+        .eq('id', currentBucketId)
+    }
+  }
+
+  // Revalidate ALL relevant paths for immediate consistency
   revalidatePath(`/archive/${currentBucketId}`)
   revalidatePath('/archive')
+  revalidatePath('/timeline')
+  revalidatePath('/')
+
   await updateQuestProgress('ADD_MEMORY')
+  return { success: true }
 }
 
 export async function createLetter(formData: FormData) {
@@ -227,7 +295,7 @@ export async function completeBucket(bucketId: string, formData: FormData) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login')
+    return { success: false, error: '로그인이 필요합니다.' }
   }
 
   const caption = formData.get('caption') as string
@@ -237,8 +305,12 @@ export async function completeBucket(bucketId: string, formData: FormData) {
 
   // Upload image to Supabase Storage if provided
   if (imageFile && imageFile.size > 0) {
+    if (imageFile.size > 20 * 1024 * 1024) {
+      return { success: false, error: '파일 용량이 너무 큽니다.' }
+    }
+
     const fileExt = imageFile.name.split('.').pop()
-    let fileName = `${user.id}/${bucketId}-${Date.now()}.${fileExt}`
+    let fileName = `${user.id}/${bucketId}-${Date.now()}`
 
     // Convert to Buffer
     const arrayBuffer = await imageFile.arrayBuffer()
@@ -247,47 +319,51 @@ export async function completeBucket(bucketId: string, formData: FormData) {
 
     // Server-side image processing with sharp & heic-convert
     try {
-      // 1. Handle HEIC/HEIF conversion first using heic-convert
       const isHeic = fileExt?.toLowerCase() === 'heic' ||
         fileExt?.toLowerCase() === 'heif' ||
         contentType === 'image/heic' ||
-        contentType === 'image/heif';
+        contentType === 'image/heif' ||
+        contentType === 'application/octet-stream';
 
       if (isHeic) {
         try {
+          console.log(`[IMAGE_PROCESS] Attempting HEIC conversion in completeBucket for user: ${user.id}, size: ${imageFile.size}`);
           const outputBuffer = await convert({
             buffer: buffer as any,
             format: 'JPEG',
             quality: 1
           });
           buffer = Buffer.from(outputBuffer as any);
-          contentType = 'image/jpeg';
-          if (fileName.toLowerCase().endsWith('.heic')) fileName = fileName.replace(/\.heic$/i, '.jpg');
-          if (fileName.toLowerCase().endsWith('.heif')) fileName = fileName.replace(/\.heif$/i, '.jpg');
-        } catch (heicError) {
-          console.warn('heic-convert in completeBucket failed:', heicError);
+        } catch (heicError: any) {
+          console.error('[HEIC_CONVERSION_FAILED] Error in completeBucket:', {
+            error: heicError.message,
+            userId: user.id
+          });
         }
       }
 
-      // 2. Optimize/Process with sharp
-      const sharpImage = sharp(buffer)
-      const metadata = await sharpImage.metadata()
-      const format = metadata.format as any
+      // Optimize/Process with sharp: WebP conversion & Resizing
+      // page: 0 ensures we only take the first frame
+      const sharpImage = sharp(buffer, { failOn: 'none', page: 0 })
+      sharpImage.rotate()
+      sharpImage.flatten({ background: { r: 28, g: 26, b: 24 } })
+      sharpImage.resize(1600, null, { withoutEnlargement: true, fit: 'inside' })
+      const processed = await sharpImage.webp({
+        quality: 85,
+        effort: 6,
+        smartSubsample: true
+      }).toBuffer()
 
-      if (format === 'heif' || format === 'heic' || fileExt?.toLowerCase() === 'heic') {
-        const processed = await sharpImage.jpeg({ quality: 80 }).toBuffer()
-        buffer = Buffer.from(processed as any)
-        contentType = 'image/jpeg'
-        if (fileName.toLowerCase().endsWith('.heic')) {
-          fileName = fileName.replace(/\.heic$/i, '.jpg')
-        }
-      } else {
-        const processed = await sharpImage.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
-        buffer = Buffer.from(processed as any)
-        contentType = 'image/jpeg'
-      }
-    } catch (sharpError) {
-      console.warn('Image processing in completeBucket failed:', sharpError)
+      buffer = Buffer.from(processed as any)
+      contentType = 'image/webp'
+      fileName = `${fileName}.webp`
+
+    } catch (imageError: any) {
+      console.error('[IMAGE_PROCESSING_CRITICAL] Completion image processing failed:', {
+        error: imageError.message,
+        userId: user.id
+      });
+      return { success: false, error: '시네마틱 이미지 생성에 실패했습니다.' }
     }
 
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -299,8 +375,8 @@ export async function completeBucket(bucketId: string, formData: FormData) {
       })
 
     if (uploadError) {
-      console.error('Image upload error:', uploadError)
-      throw new Error(`Failed to upload completion image: ${uploadError.message}`)
+      console.error('SERVER_UPLOAD_FAILURE:', uploadError)
+      return { success: false, error: '이미지 업로드에 실패했습니다.' }
     }
 
     const { data: { publicUrl } } = supabase.storage
@@ -319,26 +395,20 @@ export async function completeBucket(bucketId: string, formData: FormData) {
     })
 
     if (memoryError) {
-      console.error('Memory creation error:', memoryError)
-      // We don't necessarily want to crash the whole completion if just memory saving fails,
-      // but let's at least log it properly.
+      console.error('Memory creation error during completion:', memoryError)
     }
   }
 
   // Mark bucket as achieved
   const { error: updateError } = await supabase
     .from('buckets')
-    .update({
-      status: 'ACHIEVED',
-      // achieved_at column might not exist yet, so we'll just update status
-      // if you add achieved_at later, you can uncomment this
-      // achieved_at: new Date().toISOString(),
-    })
+    .update({ status: 'ACHIEVED' })
     .eq('id', bucketId)
+    .eq('user_id', user.id)
 
   if (updateError) {
     console.error('Bucket update error:', updateError)
-    throw new Error('Failed to update bucket')
+    return { success: false, error: '버킷 상태 업데이트에 실패했습니다.' }
   }
 
   revalidatePath('/')
@@ -347,6 +417,7 @@ export async function completeBucket(bucketId: string, formData: FormData) {
   revalidatePath(`/archive/${bucketId}`)
 
   await updateQuestProgress('COMPLETE_BUCKET')
+  return { success: true }
 }
 
 import Groq from 'groq-sdk'
@@ -580,7 +651,7 @@ export async function generateRoadmap(bucketId: string) {
     // Try primary provider (Groq)
     if (aiConfig.provider === 'groq') {
       try {
-        console.log('[AI Director] Calling Groq API...')
+        console.log('[AI Director] Calling Groq API with llama-3.3-70b-versatile...')
         text = await generateWithGroq(bucket)
       } catch (groqError) {
         console.error('[AI Director] Groq failed, trying Gemini...', groqError)
@@ -592,22 +663,38 @@ export async function generateRoadmap(bucketId: string) {
         }
       }
     } else if (aiConfig.provider === 'gemini') {
-      console.log('[AI Director] Calling Gemini API...')
+      console.log('[AI Director] Calling Gemini API (gemini-2.0-flash)...')
       text = await generateWithGemini(bucket)
     }
 
-    // Clean up markdown code blocks if present
-    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+    // Improved JSON extraction: find the first { and the last }
+    const firstBrace = text.indexOf('{')
+    const lastBrace = text.lastIndexOf('}')
+
+    if (firstBrace === -1 || lastBrace === -1) {
+      throw new Error('AI response did not contain valid JSON')
+    }
+
+    const jsonStr = text.substring(firstBrace, lastBrace + 1)
     const roadmapData = JSON.parse(jsonStr)
+
+    // Validate roadmap structure
+    if (!roadmapData.steps || !Array.isArray(roadmapData.steps)) {
+      throw new Error('AI response structure is invalid')
+    }
 
     // Add AI provider info
     roadmapData._provider = aiConfig.provider
     roadmapData._generatedAt = new Date().toISOString()
+    roadmapData._message = '🎬 AI 연출가가 당신의 꿈을 위한 특별한 로드맵을 완성했습니다.'
 
     // Save to DB
     const { error: updateError } = await supabase
       .from('buckets')
-      .update({ roadmap: roadmapData })
+      .update({
+        roadmap: roadmapData,
+        // Optionally update metadata or tags if AI suggested new ones
+      })
       .eq('id', bucketId)
 
     if (updateError) throw updateError
@@ -1000,37 +1087,45 @@ export async function getHallOfFameBuckets(page: number = 0, limit: number = 10)
 export async function issueTicket(bucketId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized' }
+  if (!user) return { success: false, error: '로그인이 필요합니다.' }
 
-  // 1. Check if already issued
-  const { data: existing } = await supabase
-    .from('bucket_tickets')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('bucket_id', bucketId)
-    .single()
+  // 1. Transactional check & update using Postgres RPC for atomicity
+  // We need to:
+  // - Check if user has daily_tickets > 0
+  // - Check if user already issued ticket to this bucket
+  // - Decrement user's daily_tickets
+  // - Add ticket to bucket_tickets table
+  // - Increment bucket's ticket count
+  // - Give XP (+5 to issuer, +20 to bucket owner)
 
-  if (existing) return { success: false, error: '이미 티켓을 발행했습니다.' }
+  const { data, error } = await supabase.rpc('issue_bucket_ticket', {
+    p_bucket_id: bucketId,
+    p_user_id: user.id
+  })
 
-  // 2. Issue ticket
-  const { error: insertError } = await supabase
-    .from('bucket_tickets')
-    .insert({ user_id: user.id, bucket_id: bucketId })
-
-  if (insertError) {
-    // If table doesn't exist yet, we might get an error. 
-    // Fallback to updating count directly for now if desired, but better to fix DB.
-    console.error('Ticket insertion error:', insertError)
-    return { success: false, error: insertError.message }
+  if (error) {
+    console.error('Ticket issuing error:', error)
+    return { success: false, error: error.message || '티켓 발행 중 오류가 발생했습니다.' }
   }
 
-  // 3. Increment ticket count in buckets table
-  // In a robust system, this would be a trigger.
-  const { data: bucket } = await supabase.from('buckets').select('tickets').eq('id', bucketId).single()
-  await supabase
-    .from('buckets')
-    .update({ tickets: (bucket?.tickets || 0) + 1 })
-    .eq('id', bucketId)
+  if (!data?.success) {
+    return { success: false, error: data?.message || '티켓을 발행할 수 없습니다.' }
+  }
+
+  // 2. Create notification for the bucket owner
+  try {
+    const { data: bucket } = await supabase.from('buckets').select('user_id').eq('id', bucketId).single()
+    if (bucket && bucket.user_id !== user.id) {
+      await supabase.from('notifications').insert({
+        user_id: bucket.user_id,
+        actor_id: user.id,
+        bucket_id: bucketId,
+        type: 'TICKET'
+      })
+    }
+  } catch (notifError) {
+    console.warn('Failed to send notification:', notifError)
+  }
 
   revalidatePath('/explore')
   revalidatePath('/hall-of-fame')

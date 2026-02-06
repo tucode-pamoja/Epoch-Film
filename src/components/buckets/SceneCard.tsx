@@ -2,8 +2,7 @@
 
 import { Bucket } from '@/types'
 import { clsx } from 'clsx'
-import { Star, CheckCircle2, Ticket, Share2 } from 'lucide-react'
-import { togglePin } from '@/actions/bucket-actions'
+import { Star, CheckCircle2, Ticket, Share2, Loader2 } from 'lucide-react'
 import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,11 +10,20 @@ import { useRouter } from 'next/navigation'
 interface SceneCardProps {
   bucket: Bucket
   onComplete?: () => void
+  onTogglePin?: () => void
+  isPending?: boolean
   isPublic?: boolean
   isFocused?: boolean
 }
 
-export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = false }: SceneCardProps) {
+export function SceneCard({
+  bucket,
+  onComplete,
+  onTogglePin,
+  isPending = false,
+  isPublic = false,
+  isFocused = false
+}: SceneCardProps) {
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
@@ -28,8 +36,12 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
   const mouseYSpring = useSpring(y)
 
   // Transform values for rotation
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["10deg", "-10deg"])
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-10deg", "10deg"])
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["15deg", "-15deg"])
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-15deg", "15deg"])
+
+  // Dynamic spotlight positions
+  const spotlightX = useTransform(mouseXSpring, [-0.5, 0.5], ["0%", "100%"])
+  const spotlightY = useTransform(mouseYSpring, [-0.5, 0.5], ["0%", "100%"])
 
   useEffect(() => {
     setMounted(true)
@@ -56,7 +68,9 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
   const handlePin = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    await togglePin(bucket.id, bucket.is_pinned)
+    if (onTogglePin) {
+      onTogglePin()
+    }
   }
 
   const handleComplete = (e: React.MouseEvent | React.TouchEvent) => {
@@ -116,10 +130,18 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
             )} />
 
             {/* Primary Spotlight Beam - Sharpens when focused */}
-            <div className={clsx(
-              "absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.2)_0%,transparent_75%)] transition-all duration-1000",
-              isFocused ? "opacity-100 scale-110" : "opacity-30 scale-100"
-            )} />
+            <motion.div
+              style={{
+                background: useTransform(
+                  [spotlightX, spotlightY],
+                  ([x, y]) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.2) 0%, transparent 60%)`
+                )
+              }}
+              className={clsx(
+                "absolute inset-0 transition-opacity duration-1000",
+                isFocused ? "opacity-100" : "opacity-30"
+              )}
+            />
 
             {/* Pinpoint Focus Light - Active only when focused */}
             {isFocused && (
@@ -127,7 +149,13 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 1 }}
-                className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(201,162,39,0.25)_0%,transparent_50%)] z-10 pointer-events-none"
+                style={{
+                  background: useTransform(
+                    [spotlightX, spotlightY],
+                    ([x, y]) => `radial-gradient(circle at ${x} ${y}, rgba(201,162,39,0.3) 0%, transparent 40%)`
+                  )
+                }}
+                className="absolute inset-0 z-10 pointer-events-none"
               />
             )}
 
@@ -141,7 +169,7 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
             )} />
 
             {/* Film Grain */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+            <div className="absolute inset-0 opacity-[0.06] pointer-events-none mix-blend-overlay bg-[url('/textures/film-noise.svg')]" />
           </>
         ) : (
           <div className="w-full h-full bg-darkroom/80 flex items-center justify-center">
@@ -187,14 +215,22 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
             )}
             <button
               onClick={handlePin}
-              className="p-1.5 text-white/30 transition-all hover:text-gold-film"
+              disabled={isPending}
+              className={clsx(
+                "p-1.5 transition-all hover:text-gold-film",
+                isPending ? "opacity-30 cursor-wait" : "text-white/30"
+              )}
             >
-              <Star
-                size={16}
-                className={clsx(
-                  bucket.is_pinned ? "fill-gold-film text-gold-film" : "fill-transparent"
-                )}
-              />
+              {isPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Star
+                  size={16}
+                  className={clsx(
+                    bucket.is_pinned ? "fill-gold-film text-gold-film" : "fill-transparent"
+                  )}
+                />
+              )}
             </button>
           </div>
         )}
@@ -242,8 +278,8 @@ export function SceneCard({ bucket, onComplete, isPublic = false, isFocused = fa
         </button>
       </div>
       {/* Film Border Aesthetic */}
-      <div className="absolute inset-x-0 top-0 h-4 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-4 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-4 bg-[url('/textures/film-noise.svg')] opacity-10 pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-4 bg-[url('/textures/film-noise.svg')] opacity-10 pointer-events-none" />
     </motion.div>
   )
 }

@@ -18,13 +18,26 @@ async function createStorageBucket() {
     .storage
     .createBucket(bucketName, {
       public: true, // Making it public for easy reading
-      fileSizeLimit: 10485760, // 10MB
-      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+      fileSizeLimit: 52428800, // 50MB
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif']
     })
 
   if (error) {
     if (error.message.includes('already exists')) {
-      console.log(`Bucket '${bucketName}' already exists.`)
+      console.log(`Bucket '${bucketName}' already exists. Updating configuration...`)
+      const { error: updateError } = await supabase
+        .storage
+        .updateBucket(bucketName, {
+          public: true,
+          fileSizeLimit: 52428800, // 50MB
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif']
+        })
+
+      if (updateError) {
+        console.error('Error updating bucket:', updateError)
+      } else {
+        console.log(`Bucket '${bucketName}' updated successfully.`)
+      }
     } else {
       console.error('Error creating bucket:', error)
       return

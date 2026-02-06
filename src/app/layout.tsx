@@ -6,6 +6,7 @@ import "pretendard/dist/web/static/pretendard.css"; // Keep Pretendard for clean
 import "@fontsource/jetbrains-mono/400.css";
 import "./globals.css";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Toaster } from 'sonner'
 
 export const metadata: Metadata = {
   title: "Epoch Film",
@@ -41,6 +42,7 @@ export default function RootLayout({
         </div>
         {children}
         <BottomNav />
+        <Toaster position="top-center" richColors theme="dark" />
       </body>
     </html>
   );

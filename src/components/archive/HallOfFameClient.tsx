@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Ticket, Trophy, Crown, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { CinematicImage } from '@/components/archive/CinematicImage'
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import { getHallOfFameBuckets } from '@/app/archive/actions'
 import { Loader2 } from 'lucide-react'
@@ -54,10 +55,11 @@ export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
                     className="relative w-full aspect-[4/5] sm:aspect-video rounded-sm overflow-hidden border border-gold-film/30 shadow-[0_0_50px_rgba(212,175,55,0.2)] group"
                 >
                     <div className="absolute inset-0 bg-black/60 z-10" />
-                    <img
+                    <CinematicImage
                         src={first.thumbnail_url || 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7'}
                         alt={first.title}
-                        className="absolute inset-0 w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                        fill
+                        className="grayscale group-hover:grayscale-0 transition-all duration-700"
                     />
 
                     {/* Gold Frame Overlay */}
@@ -101,7 +103,12 @@ export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
                                 </div>
 
                                 <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-white/10 mb-4 z-10 relative bg-darkroom">
-                                    <img src={item.thumbnail_url || '/placeholder-poster.jpg'} alt={item.title} className="w-full h-full object-cover" />
+                                    <CinematicImage
+                                        src={item.thumbnail_url || '/placeholder-poster.jpg'}
+                                        alt={item.title}
+                                        fill
+                                        showGrain={false}
+                                    />
                                 </div>
 
                                 <div className="space-y-2 z-10 relative">
@@ -139,12 +146,13 @@ export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
                                 >
                                     <div className="flex items-center gap-6">
                                         <span className="font-mono-technical text-smoke/50 w-6">{(index + 4).toString().padStart(2, '0')}</span>
-                                        <div className="w-10 h-10 bg-darkroom rounded-sm overflow-hidden">
-                                            {item.thumbnail_url ? (
-                                                <img src={item.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
-                                            )}
+                                        <div className="w-10 h-10 bg-darkroom rounded-sm overflow-hidden relative">
+                                            <CinematicImage
+                                                src={item.thumbnail_url || '/placeholder-poster.jpg'}
+                                                alt=""
+                                                fill
+                                                showGrain={false}
+                                            />
                                         </div>
                                         <div className="text-left">
                                             <div className="text-sm text-celluloid group-hover:text-gold-film transition-colors">{item.title}</div>

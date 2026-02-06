@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { Sparkles, CheckCircle2, Circle, Loader2, RefreshCw, Film } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { generateRoadmap } from '@/app/archive/actions'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 
 interface Step {
   step: number
@@ -32,18 +33,21 @@ interface RoadmapViewProps {
 }
 
 export function RoadmapView({ bucketId, roadmap, isOwner }: RoadmapViewProps) {
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [isGenerating, setIsGenerating] = useState(false) // Keep for local loading state too
 
   const handleGenerate = async () => {
-    try {
-      setIsGenerating(true)
-      await generateRoadmap(bucketId)
-    } catch (error) {
-      console.error(error)
-      alert('Failed to generate roadmap')
-    } finally {
-      setIsGenerating(false)
-    }
+    setIsGenerating(true)
+    startTransition(async () => {
+      try {
+        await generateRoadmap(bucketId)
+        toast.success('AI Roadmap generated successfully!')
+      } catch (error) {
+        toast.error('Failed to generate roadmap')
+      } finally {
+        setIsGenerating(false)
+      }
+    })
   }
 
   if (!roadmap) {
