@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { CheckCircle2, Circle, Star, Award } from 'lucide-react'
+import { CheckCircle2, Circle, Star, Award, Clapperboard } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useState } from 'react'
 import { claimQuestReward } from '@/app/archive/actions'
@@ -14,6 +14,8 @@ interface Quest {
     progress: number
     requirement_count: number
     is_completed: boolean
+    is_claimed?: boolean
+    title_ko?: string
 }
 
 interface QuestListProps {
@@ -36,8 +38,16 @@ export function QuestList({ quests }: QuestListProps) {
             </div>
 
             {quests.length === 0 && (
-                <div className="p-8 border border-dashed border-white/10 rounded-sm text-center">
-                    <p className="text-smoke italic text-xs uppercase tracking-widest">새로운 미션이 곧 추가될 예정입니다.</p>
+                <div className="py-20 flex flex-col items-center justify-center text-center opacity-60">
+                    <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                        <Clapperboard className="w-6 h-6 text-smoke" />
+                    </div>
+                    <p className="text-smoke/80 font-mono-technical text-xs tracking-[0.2em] uppercase mb-1">
+                        MISSION STANDBY
+                    </p>
+                    <p className="text-smoke/40 text-[10px] font-light">
+                        새로운 미션이 곧 추가될 예정입니다.
+                    </p>
                 </div>
             )}
         </div>

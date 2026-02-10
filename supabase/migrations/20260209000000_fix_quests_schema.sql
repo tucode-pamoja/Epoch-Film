@@ -1,0 +1,55 @@
+-- Ensure quests table exists
+CREATE TABLE IF NOT EXISTS public.quests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('DAILY', 'WEEKLY', 'MONTHLY', 'SPECIAL')),
+  title VARCHAR(200) NOT NULL,
+  title_ko VARCHAR(200),
+  description TEXT,
+  xp_reward INTEGER DEFAULT 0,
+  badge_reward VARCHAR(50),
+  requirement_type VARCHAR(50) NOT NULL,
+  requirement_count INTEGER DEFAULT 1,
+  category_filter VARCHAR(50),
+  is_active BOOLEAN DEFAULT true,
+  starts_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure user_quests table exists
+CREATE TABLE IF NOT EXISTS public.user_quests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  quest_id UUID REFERENCES public.quests(id) ON DELETE CASCADE,
+  progress INTEGER DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'CLAIMED', 'EXPIRED')),
+  completed_at TIMESTAMPTZ,
+  claimed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, quest_id)
+);
+
+-- RLS
+ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Quests are viewable by everyone" ON public.quests;
+CREATE POLICY "Quests are viewable by everyone" ON public.quests FOR SELECT USING (true);
+
+ALTER TABLE public.user_quests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own quest progress" ON public.user_quests;
+CREATE POLICY "Users can view their own quest progress" ON public.user_quests FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own quest progress" ON public.user_quests;
+CREATE POLICY "Users can update their own quest progress" ON public.user_quests FOR UPDATE USING (auth.uid() = user_id);
+
+-- Seed Data (if empty)
+INSERT INTO public.quests (type, title, title_ko, description, xp_reward, requirement_type, requirement_count) 
+SELECT 'DAILY', 'First Frame', '첫 프레임', '오늘 새로운 버킷을 1개 추가하세요', 50, 'CREATE_BUCKET', 1
+WHERE NOT EXISTS (SELECT 1 FROM public.quests WHERE requirement_type = 'CREATE_BUCKET');
+
+INSERT INTO public.quests (type, title, title_ko, description, xp_reward, requirement_type, requirement_count)
+SELECT 'DAILY', 'Memory Keeper', '기억 수집가', '체크인 샷을 1개 업로드하세요', 30, 'ADD_MEMORY', 1
+WHERE NOT EXISTS (SELECT 1 FROM public.quests WHERE requirement_type = 'ADD_MEMORY');
+
+INSERT INTO public.quests (type, title, title_ko, description, xp_reward, requirement_type, requirement_count)
+SELECT 'WEEKLY', 'Director''s Cut', '감독판', '이번 주 버킷 2개를 완료하세요', 200, 'COMPLETE_BUCKET', 2
+WHERE NOT EXISTS (SELECT 1 FROM public.quests WHERE requirement_type = 'COMPLETE_BUCKET');

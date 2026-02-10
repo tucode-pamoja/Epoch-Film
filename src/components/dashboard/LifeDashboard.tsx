@@ -53,28 +53,28 @@ export function LifeDashboard({ userStats }: LifeDashboardProps) {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
                 <StatCard
                     icon={<Flame className="text-orange-film" />}
-                    label="기록 스트릭 (STREAK)"
+                    label="CAMERA STREAK"
                     value={`${userStats.streak}일`}
                     subValue="카메라를 계속 돌리세요"
                 />
                 <StatCard
                     icon={<Target className="text-cyan-film" />}
-                    label="완성된 에포크 (COMPLETED)"
+                    label="COMPLETED SCENES"
                     value={userStats.completedDreams}
                     subValue="아카이브된 최종 편집본"
                 />
                 <StatCard
                     icon={<Film className="text-gold-film" />}
-                    label="제작 중인 꿈 (ACTIVE)"
+                    label="ACTIVE PRODUCTION"
                     value={userStats.activeDreams}
                     subValue="현재 프로덕션 진행 중"
                 />
                 <StatCard
                     icon={<Zap className="text-purple-dusk" />}
-                    label="누적 경험치 (TOTAL_XP)"
+                    label="DIRECTOR XP"
                     value={userStats.xp}
                     subValue="감독 커리어 합계"
                 />
@@ -85,17 +85,19 @@ export function LifeDashboard({ userStats }: LifeDashboardProps) {
 
 function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string | number, subValue: string }) {
     return (
-        <div className="glass-warm border-none film-border rounded-sm p-6 shadow-deep group hover:bg-white/5 transition-colors">
-            <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-white/5 rounded-sm group-hover:bg-white/10 transition-colors">
-                    {icon}
+        <div className="glass-warm border-none film-border rounded-sm p-6 shadow-deep group hover:bg-white/5 transition-colors flex flex-col h-full min-h-[160px]">
+            <div className="flex-1">
+                <div className="mb-4">
+                    <div className="inline-flex p-2 bg-white/5 rounded-sm group-hover:bg-white/10 transition-colors">
+                        {icon}
+                    </div>
                 </div>
-                <span className="font-mono-technical text-[9px] text-smoke tracking-widest uppercase">{label}</span>
+                <div className="space-y-1 mb-4">
+                    <span className="block font-mono-technical text-[9px] text-smoke tracking-widest uppercase leading-tight">{label}</span>
+                    <div className="text-3xl font-display text-celluloid">{value}</div>
+                </div>
             </div>
-            <div className="space-y-1">
-                <div className="text-3xl font-display text-celluloid">{value}</div>
-                <p className="text-[10px] text-smoke/50 font-light tracking-wide italic">{subValue}</p>
-            </div>
+            <p className="text-[10px] text-smoke/50 font-light tracking-wide italic border-t border-white/5 pt-3 mt-auto">{subValue}</p>
         </div>
     )
 }

@@ -7,21 +7,35 @@ import sharp from 'sharp'
 import convert from 'heic-convert'
 
 export async function getBucket(id: string) {
+  console.log('[getBucket] Fetching bucket with id:', id)
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('buckets')
-    .select('*, users(nickname, profile_image_url)')
+    .select('*, users(nickname, profile_image_url), original_bucket:buckets!original_bucket_id(id, title, user_id, users(nickname, profile_image_url))')
     .eq('id', id)
     .single()
 
   if (error) {
+    // If no row found, return null silently
+    if (error.code === 'PGRST116') return null
+
     console.error('Error fetching bucket:', error.message, error.details, error.hint)
     return null
   }
-  return data
+
+  // Fetch remake count
+  const { count: remakeCount } = await supabase
+    .from('buckets')
+    .select('*', { count: 'exact', head: true })
+    .eq('original_bucket_id', id)
+
+  return { ...data, remake_count: remakeCount || 0 }
 }
 
 export async function createBucket(formData: FormData) {
+  console.log('[CREATE_BUCKET_ACTION] Received form data:',
+    Object.fromEntries(formData.entries())
+  )
   const title = formData.get('title') as string
   const category = formData.get('category') as string
   const description = formData.get('description') as string
@@ -49,30 +63,70 @@ export async function createBucket(formData: FormData) {
   }
 
   if (!title || !category) {
-    // Basic validation, should be handled by client as well
-    return
+    redirect('/archive/new?error=제목과 카테고리를 입력해주세요.')
   }
+
+  const routineFrequency = formData.get('routineFrequency') as string
+  const routineDaysRaw = formData.getAll('routineDays')
+  const routineDays = routineDaysRaw.map(day => parseInt(day as string))
 
   const { error } = await supabase.from('buckets').insert({
     user_id: user.id,
     title,
     category,
-    importance: parseInt(importance),
+    importance: parseInt(importance || '3'),
     description,
     tags, // Add tags here
     is_public: true, // Default to public for now or add to form
     is_pinned: false,
     target_date: targetDate, // Set target_date based on type
+    is_routine: sceneType === 'ROUTINE',
+    routine_frequency: sceneType === 'ROUTINE' ? routineFrequency : null,
+    routine_days: sceneType === 'ROUTINE' && routineFrequency === 'WEEKLY' ? routineDays : null,
   })
 
   if (error) {
     console.error('Error creating bucket:', error)
-    redirect('/archive/new?error=Failed to create reel')
+    redirect(`/archive/new?error=${encodeURIComponent(error.message)}`)
   }
 
-  revalidatePath('/archive')
+  revalidatePath('/')
   await updateQuestProgress('CREATE_BUCKET')
-  redirect('/archive')
+
+  const redirectTab = sceneType === 'ROUTINE' ? 'ROUTINES' : sceneType === 'YEARLY' ? 'YEAR' : 'LIFE'
+  redirect(`/?tab=${redirectTab}`)
+}
+
+export async function deleteBucket(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  // Verify ownership before delete
+  const { data: bucket, error: fetchError } = await supabase
+    .from('buckets')
+    .select('user_id')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !bucket) throw new Error('Scene not found')
+  if (bucket.user_id !== user.id) throw new Error('Forbidden')
+
+  const { error: deleteError } = await supabase
+    .from('buckets')
+    .delete()
+    .eq('id', id)
+
+  if (deleteError) {
+    console.error('Delete error:', deleteError)
+    throw new Error('Failed to scrap production')
+  }
+
+  revalidatePath('/')
+  revalidatePath('/archive')
+  revalidatePath('/explore')
+
+  return { success: true }
 }
 
 export async function saveMemory(bucketId: string, formData: FormData) {
@@ -248,7 +302,7 @@ export async function saveMemory(bucketId: string, formData: FormData) {
 
   // Revalidate ALL relevant paths for immediate consistency
   revalidatePath(`/archive/${currentBucketId}`)
-  revalidatePath('/archive')
+  revalidatePath('/')
   revalidatePath('/timeline')
   revalidatePath('/')
 
@@ -412,11 +466,41 @@ export async function completeBucket(bucketId: string, formData: FormData) {
   }
 
   revalidatePath('/')
-  revalidatePath('/archive')
+  revalidatePath('/')
   revalidatePath('/timeline')
   revalidatePath(`/archive/${bucketId}`)
 
   await updateQuestProgress('COMPLETE_BUCKET')
+  return { success: true }
+}
+
+// --- Routine Cycle Completion ---
+export async function completeRoutineCycle(bucketId: string) {
+  'use server'
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: '로그인이 필요합니다.' }
+  }
+
+  const { error } = await supabase
+    .from('buckets')
+    .update({ routine_last_completed_at: new Date().toISOString() })
+    .eq('id', bucketId)
+    .eq('user_id', user.id)
+
+  if (error) {
+    console.error('Routine cycle complete error:', error)
+    return { success: false, error: '루틴 완료 기록에 실패했습니다.' }
+  }
+
+  revalidatePath('/')
+  revalidatePath(`/archive/${bucketId}`)
+
   return { success: true }
 }
 
@@ -762,7 +846,7 @@ export async function updateBucket(bucketId: string, formData: FormData) {
   }
 
   revalidatePath(`/archive/${bucketId}`)
-  revalidatePath('/archive')
+  revalidatePath('/')
 }
 
 export async function updateMemory(memoryId: string, formData: FormData) {
@@ -806,6 +890,66 @@ export async function deleteMemory(memoryId: string, bucketId: string) {
   revalidatePath(`/archive/${bucketId}`)
 }
 
+export async function updateMemoryCaption(memoryId: string, bucketId: string, caption: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase
+    .from('memories')
+    .update({ caption })
+    .eq('id', memoryId)
+    .eq('user_id', user.id)
+
+  if (error) {
+    console.error('Error updating memory caption:', error)
+    throw new Error(`Failed to update caption: ${error.message}`)
+  }
+
+  revalidatePath(`/archive/${bucketId}`)
+}
+
+export async function updateMemoryImage(memoryId: string, bucketId: string, formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const imageFile = formData.get('image') as File
+  if (!imageFile) {
+    throw new Error('No image provided')
+  }
+
+  // Upload new image
+  const fileExt = imageFile.name.split('.').pop()
+  const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+  const { error: uploadError } = await supabase.storage
+    .from('memories')
+    .upload(fileName, imageFile)
+
+  if (uploadError) {
+    console.error('Error uploading memory image:', uploadError)
+    throw new Error('Image upload failed')
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('memories')
+    .getPublicUrl(fileName)
+
+  // Update memory record
+  const { error: updateError } = await supabase
+    .from('memories')
+    .update({ media_url: publicUrl })
+    .eq('id', memoryId)
+    .eq('user_id', user.id)
+
+  if (updateError) {
+    console.error('Error updating memory image:', updateError)
+    throw new Error(`Failed to update image: ${updateError.message}`)
+  }
+
+  revalidatePath(`/archive/${bucketId}`)
+}
+
 export async function setBucketThumbnail(bucketId: string, imageUrl: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -826,15 +970,20 @@ export async function setBucketThumbnail(bucketId: string, imageUrl: string) {
   revalidatePath('/archive')
 }
 
-export async function getUserStats() {
+export async function getUserStats(targetUserId?: string) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  let userId = targetUserId
+
+  if (!userId) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    userId = user.id
+  }
 
   const { data: buckets } = await supabase
     .from('buckets')
     .select('status, created_at')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
 
   const completed = buckets?.filter(b => b.status === 'ACHIEVED').length || 0
   const active = buckets?.filter(b => b.status === 'ACTIVE').length || 0
@@ -842,18 +991,30 @@ export async function getUserStats() {
   const { data: profile } = await supabase
     .from('users')
     .select('xp, level')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single()
+
+  // Follower count (Robust method)
+  const { count: followerCount, error: countError } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('following_id', userId)
+
+  if (countError) {
+    console.error(`[getUserStats] Error fetching follower count for ${userId}:`, countError)
+  }
 
   const baseXp = profile?.xp || 0
   const totalXp = baseXp + (completed * 100)
   const currentLevel = Math.floor(totalXp / 500) + 1
   const nextLevelXp = currentLevel * 500
 
+  // ... memories and streak logic ...
+
   const { data: memories } = await supabase
     .from('memories')
     .select('created_at')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
   let streak = 0
@@ -877,34 +1038,117 @@ export async function getUserStats() {
     }
   }
 
+  // Following count
+  const { count: followingCount } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', userId)
+
   return {
     level: currentLevel,
     xp: totalXp,
     nextLevelXp,
     streak,
     completedDreams: completed,
-    activeDreams: active
+    activeDreams: active,
+    followerCount: Number(followerCount || 0),
+    followingCount: Number(followingCount || 0)
+  }
+}
+
+export async function getUserBuckets(targetUserId?: string) {
+  const supabase = await createClient()
+  let userId = targetUserId
+  let isOwnProfile = false
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!userId) {
+    if (!user) return []
+    userId = user.id
+    isOwnProfile = true
+  } else {
+    isOwnProfile = user?.id === userId
+  }
+
+  let query = supabase
+    .from('buckets')
+    .select('id, title, thumbnail_url, status, category, is_public, tickets, is_routine, routine_frequency, routine_days, original_bucket_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  // If viewing another user's profile, only show public buckets
+  if (!isOwnProfile) {
+    query = query.eq('is_public', true)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching user buckets:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function getPublicUserProfile(userId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, nickname, profile_image_url, level, xp')
+    .eq('id', userId)
+    .single()
+
+  if (error) return null
+
+  // Transform to match Auth User structure somewhat for compatibility or return simpler object
+  return {
+    id: data.id,
+    user_metadata: {
+      full_name: data.nickname,
+      avatar_url: data.profile_image_url
+    },
+    email: 'private@epoch.film' // Hide email
   }
 }
 
 export async function getActiveQuests() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return []
+  if (!user) {
+    console.log('[getActiveQuests] No user logged in')
+    return []
+  }
 
   // Ensure user_quests exist for all active quests
-  const { data: allQuests } = await supabase
+  const { data: allQuests, error: questError } = await supabase
     .from('quests')
     .select('*')
     .eq('is_active', true)
 
-  if (!allQuests) return []
+  if (questError) {
+    console.warn('[getActiveQuests] Failed to fetch quests. The "quests" table might be missing or RLS policies are blocking access.', {
+      code: questError.code || 'UNKNOWN',
+      message: questError.message || 'No error message provided',
+      details: questError.details || 'No details'
+    })
+    return []
+  }
+
+  console.log(`[getActiveQuests] Found ${allQuests?.length || 0} active quests`)
+
+  if (!allQuests || allQuests.length === 0) return []
 
   // Get current user progress
-  const { data: userQuests } = await supabase
+  const { data: userQuests, error: userQuestError } = await supabase
     .from('user_quests')
     .select('*, quests(*)')
     .eq('user_id', user.id)
+
+  if (userQuestError) {
+    console.error('[getActiveQuests] Error fetching user quests:', userQuestError)
+  }
 
   // Map progress to quests
   return allQuests.map(quest => {
@@ -1007,12 +1251,36 @@ export async function claimQuestReward(questId: string) {
   return { success: true, xpReward }
 }
 
+async function enrichBucketsWithRemakeCount(buckets: any[]) {
+  if (!buckets || buckets.length === 0) return buckets
+  const supabase = await createClient()
+  const bucketIds = buckets.map(b => b.id)
+
+  const { data: counts, error } = await supabase
+    .from('buckets')
+    .select('original_bucket_id')
+    .in('original_bucket_id', bucketIds)
+
+  if (error) return buckets
+
+  const countMap = (counts || []).reduce((acc: any, curr: any) => {
+    acc[curr.original_bucket_id] = (acc[curr.original_bucket_id] || 0) + 1
+    return acc
+  }, {})
+
+  return buckets.map(b => ({
+    ...b,
+    remake_count: countMap[b.id] || 0
+  }))
+}
+
 export async function getPublicBuckets(
   page: number = 0,
   limit: number = 12,
   status?: string,
   category?: string,
-  searchTerm?: string
+  searchTerm?: string,
+  followingOnly: boolean = false
 ) {
   const supabase = await createClient()
   const from = page * limit
@@ -1024,10 +1292,24 @@ export async function getPublicBuckets(
     .select('*, users!inner(nickname, profile_image_url)')
     .eq('is_public', true)
 
+  if (followingOnly) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+    // Join with follows table to get only following users' buckets
+    // In Supabase, if we use !inner on a join, it acts like an INNER JOIN filtering the main table
+    query = supabase
+      .from('buckets')
+      .select('*, users!inner(nickname, profile_image_url), follows!inner(follower_id)')
+      .eq('is_public', true)
+      .eq('follows.follower_id', user.id)
+  }
+
   if (status) query = query.eq('status', status)
   if (category && category !== 'ALL') query = query.eq('category', category)
   if (searchTerm) {
-    query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+    // Integrated search: title, description, and director nickname
+    // Using explicit table alias for clarity in cross-table OR filter
+    query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,users.nickname.ilike.%${searchTerm}%`)
   }
 
   const { data, error } = await query
@@ -1035,17 +1317,21 @@ export async function getPublicBuckets(
     .range(from, to)
 
   if (error) {
-    console.warn('[DB Sync] Public buckets fetch failed, attempting legacy fallback:', error.message)
+    console.warn('[DB Sync] Public buckets fetch failed, attempting resilient fallback:', error.message)
 
-    // 2. Legacy Fallback: Try fetching without the is_public column or complex join if they don't exist yet
+    // 2. Resilient Fallback: Separate search for nickname if cross-table OR fails
     let fallbackQuery = supabase
       .from('buckets')
-      .select('*, users(nickname, profile_image_url)')
+      .select('*, users!inner(nickname, profile_image_url)')
+      .eq('is_public', true)
 
     if (status) fallbackQuery = fallbackQuery.eq('status', status)
     if (category && category !== 'ALL') fallbackQuery = fallbackQuery.eq('category', category)
+
     if (searchTerm) {
-      fallbackQuery = fallbackQuery.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+      // If the integrated OR failed, we try a simpler OR on titles, 
+      // but we should still try to find it by director if that's what the user typed
+      fallbackQuery = fallbackQuery.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,users.nickname.ilike.%${searchTerm}%`)
     }
 
     const { data: fallbackData, error: fallbackError } = await fallbackQuery
@@ -1056,9 +1342,9 @@ export async function getPublicBuckets(
       console.error('[DB Error] Critical failure in public buckets fallback:', fallbackError.message)
       return []
     }
-    return fallbackData || []
+    return enrichBucketsWithRemakeCount(fallbackData || [])
   }
-  return data || []
+  return enrichBucketsWithRemakeCount(data || [])
 }
 
 export async function getHallOfFameBuckets(page: number = 0, limit: number = 10) {
@@ -1079,9 +1365,9 @@ export async function getHallOfFameBuckets(page: number = 0, limit: number = 10)
       .from('buckets')
       .select('*, users(nickname, profile_image_url)')
       .range(from, to)
-    return fallbackData || []
+    return enrichBucketsWithRemakeCount(fallbackData || [])
   }
-  return data || []
+  return enrichBucketsWithRemakeCount(data || [])
 }
 
 export async function issueTicket(bucketId: string) {
@@ -1089,49 +1375,96 @@ export async function issueTicket(bucketId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { success: false, error: '로그인이 필요합니다.' }
 
-  // 1. Transactional check & update using Postgres RPC for atomicity
-  // We need to:
-  // - Check if user has daily_tickets > 0
-  // - Check if user already issued ticket to this bucket
-  // - Decrement user's daily_tickets
-  // - Add ticket to bucket_tickets table
-  // - Increment bucket's ticket count
-  // - Give XP (+5 to issuer, +20 to bucket owner)
-
-  const { data, error } = await supabase.rpc('issue_bucket_ticket', {
-    p_bucket_id: bucketId,
-    p_user_id: user.id
-  })
-
-  if (error) {
-    console.error('Ticket issuing error:', error)
-    return { success: false, error: error.message || '티켓 발행 중 오류가 발생했습니다.' }
-  }
-
-  if (!data?.success) {
-    return { success: false, error: data?.message || '티켓을 발행할 수 없습니다.' }
-  }
-
-  // 2. Create notification for the bucket owner
   try {
-    const { data: bucket } = await supabase.from('buckets').select('user_id').eq('id', bucketId).single()
-    if (bucket && bucket.user_id !== user.id) {
-      await supabase.from('notifications').insert({
-        user_id: bucket.user_id,
-        actor_id: user.id,
-        bucket_id: bucketId,
-        type: 'TICKET'
-      })
+    // 1. Check if already issued
+    const { data: existingTicket } = await supabase
+      .from('bucket_tickets')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('bucket_id', bucketId)
+      .single()
+
+    if (existingTicket) {
+      return { success: false, error: '이미 티켓을 발행했습니다.' }
     }
-  } catch (notifError) {
-    console.warn('Failed to send notification:', notifError)
+
+    // 2. Check if user has daily tickets
+    // 2. No daily limit check needed (Tickets are like 'Likes')
+
+    // 3. Issue Ticket Operations (Sequential)
+
+    // A. Insert ticket record
+    const { error: insertError } = await supabase
+      .from('bucket_tickets')
+      .insert({ user_id: user.id, bucket_id: bucketId })
+
+    if (insertError) {
+      console.error('Ticket insert failed:', insertError)
+      return { success: false, error: '티켓 발행 중 오류가 발생했습니다.' }
+    }
+
+    // B. Add XP to issuer (Reward for appreciating art)
+    // We fetch user XP first to increment safely
+    const { data: userData } = await supabase
+      .from('users')
+      .select('xp')
+      .eq('id', user.id)
+      .single()
+
+    await supabase
+      .from('users')
+      .update({
+        xp: (userData?.xp || 0) + 5
+      })
+      .eq('id', user.id)
+
+    // C. Increment bucket ticket count & Get Owner ID
+    const { data: bucketData } = await supabase
+      .from('buckets')
+      .select('user_id, tickets')
+      .eq('id', bucketId)
+      .single()
+
+    if (bucketData) {
+      await supabase
+        .from('buckets')
+        .update({ tickets: (bucketData.tickets || 0) + 1 })
+        .eq('id', bucketId)
+
+      // D. Reward Owner
+      const ownerId = bucketData.user_id
+      if (ownerId && ownerId !== user.id) {
+        const { data: ownerData } = await supabase.from('users').select('xp').eq('id', ownerId).single()
+        if (ownerData) {
+          await supabase.from('users').update({ xp: (ownerData.xp || 0) + 20 }).eq('id', ownerId)
+        }
+      }
+    }
+
+    // 4. Create notification for the bucket owner
+    try {
+      if (bucketData && bucketData.user_id && bucketData.user_id !== user.id) {
+        await supabase.from('notifications').insert({
+          user_id: bucketData.user_id,
+          actor_id: user.id,
+          bucket_id: bucketId,
+          type: 'TICKET'
+        })
+      }
+    } catch (notifError) {
+      console.warn('Failed to send notification:', notifError)
+    }
+
+    revalidatePath('/explore')
+    revalidatePath('/hall-of-fame')
+    revalidatePath(`/archive/${bucketId}`)
+
+    return { success: true }
+
+  } catch (error: any) {
+    console.error('Ticket issuing error:', error)
+    return { success: false, error: error.message || '알 수 없는 오류가 발생했습니다.' }
   }
-
-  revalidatePath('/explore')
-  revalidatePath('/hall-of-fame')
-  revalidatePath(`/archive/${bucketId}`)
-
-  return { success: true }
 }
 
 export async function getComments(bucketId: string) {
@@ -1240,4 +1573,203 @@ export async function clearNotifications() {
 
   if (error) throw error
   revalidatePath('/', 'layout')
+}
+
+export async function followDirector(followingId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: '로그인이 필요합니다.' }
+
+  // High-speed direct attempt
+  const { error } = await supabase
+    .from('follows')
+    .insert({
+      follower_id: user.id,
+      following_id: followingId
+    })
+
+  if (error) {
+    // Fallback: If foreign key error, the user might not be in public.users yet
+    if (error.code === '23503') {
+      await supabase.from('users').upsert({
+        id: user.id,
+        email: user.email,
+        nickname: user.user_metadata?.full_name || user.email?.split('@')[0],
+        profile_image_url: user.user_metadata?.avatar_url,
+        updated_at: new Date().toISOString()
+      })
+      // Retry once
+      const { error: retryError } = await supabase
+        .from('follows')
+        .insert({ follower_id: user.id, following_id: followingId })
+
+      if (retryError) return { success: false, error: `팔로우 실패: ${retryError.message}` }
+    } else {
+      console.error('Follow error:', error)
+      return { success: false, error: `팔로우 실패: ${error.message}` }
+    }
+  }
+
+  // Rapid revalidation (only essential paths)
+  revalidatePath(`/profile/${followingId}`)
+  revalidatePath('/explore')
+  return { success: true }
+}
+
+export async function unfollowDirector(followingId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: '로그인이 필요합니다.' }
+
+  const { error } = await supabase
+    .from('follows')
+    .delete()
+    .eq('follower_id', user.id)
+    .eq('following_id', followingId)
+
+  if (error) {
+    console.error('Unfollow error:', error)
+    return { success: false, error: `팔로우 취소 실패: ${error.message}` }
+  }
+
+  revalidatePath(`/profile/${followingId}`)
+  revalidatePath('/explore')
+  return { success: true }
+}
+
+export async function isFollowingDirector(followingId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+
+  const { data, error } = await supabase
+    .from('follows')
+    .select('created_at')
+    .eq('follower_id', user.id)
+    .eq('following_id', followingId)
+    .single()
+
+  if (error || !data) return false
+  return true
+}
+
+// --- Remake & Casting Actions ---
+
+export async function remakeBucket(bucketId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // 1. Fetch original bucket
+  const { data: original, error: fetchError } = await supabase
+    .from('buckets')
+    .select('*')
+    .eq('id', bucketId)
+    .single()
+
+  if (fetchError || !original) throw new Error('Original scene not found')
+
+  // 2. Create new bucket based on original
+  const { data: newBucket, error: createError } = await supabase
+    .from('buckets')
+    .insert({
+      user_id: user.id,
+      title: original.title,
+      description: original.description,
+      category: original.category,
+      status: 'ACTIVE',
+      is_pinned: false,
+      importance: original.importance,
+      tags: original.tags,
+      roadmap: original.roadmap,
+      thumbnail_url: original.thumbnail_url,
+      is_public: true,
+      original_bucket_id: original.id,
+      is_routine: original.is_routine,
+      routine_frequency: original.routine_frequency,
+      routine_days: original.routine_days,
+      routine_last_completed_at: null, // Reset routine completion
+      tickets: 0
+    })
+    .select()
+    .single()
+
+  if (createError) {
+    console.error('Remake error detail:', JSON.stringify(createError, null, 2))
+    throw new Error(`Failed to remake scene: ${createError.message}`)
+  }
+
+  revalidatePath('/archive')
+  return newBucket
+}
+
+export async function getMutualFollowers() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // 1. My Followings
+  const { data: followings } = await supabase
+    .from('follows')
+    .select('following_id')
+    .eq('follower_id', user.id)
+
+  if (!followings?.length) return []
+  const followingIds = followings.map(f => f.following_id)
+
+  // 2. My Followers who are in my followings list (Mutuals)
+  // Join with 'users' table to get profile info
+  const { data: mutuals, error } = await supabase
+    .from('follows')
+    .select(`
+      follower_id,
+      users:follows_follower_id_fkey (
+        id,
+        nickname,
+        profile_image_url,
+        email
+      )
+    `)
+    .eq('following_id', user.id)
+    .in('follower_id', followingIds)
+
+  if (error) {
+    console.error('Error fetching mutuals:', error)
+    return []
+  }
+
+  return mutuals?.map((m: any) => m.users).filter(Boolean) || []
+}
+
+export async function inviteCast(bucketId: string, targetUserId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('bucket_casts')
+    .insert({
+      bucket_id: bucketId,
+      user_id: targetUserId,
+      status: 'pending'
+    })
+
+  if (error) {
+    if (error.code === '23505') throw new Error('Already casted')
+    throw new Error('Failed to send casting call')
+  }
+  revalidatePath(`/archive/${bucketId}`)
+}
+
+export async function respondToCast(bucketId: string, castId: string, status: 'accepted' | 'rejected' | 'changes_requested', message?: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('bucket_casts')
+    .update({
+      status,
+      message,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', castId)
+
+  if (error) throw new Error('Failed to respond to casting call')
+  revalidatePath(`/archive/${bucketId}`)
+  revalidatePath('/archive')
 }

@@ -31,7 +31,15 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
         const file = e.target.files?.[0]
         if (file) {
             setConversionError(null)
+
+            // Clean up previous preview URL
+            if (imagePreview) {
+                URL.revokeObjectURL(imagePreview)
+                setImagePreview(null)
+            }
+
             let fileToProcess = file
+            let canPreview = true
 
             const isHeic = file.type === 'image/heic' ||
                 file.type === 'image/heif' ||
@@ -53,15 +61,22 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
                     fileToProcess = new File([blob], fileName, { type: 'image/jpeg' })
                 } catch (err: any) {
                     console.warn('Client-side HEIC conversion failed, will fallback to server-side conversion:', err)
-                    setConversionError('브라우저에서 이미지 미리보기를 생성할 수 없지만, 업로드 시 자동으로 변환됩니다.')
+                    setConversionError('HEIC 미리보기가 지원되지 않지만, 업로드 시 자동 변환됩니다.')
+                    canPreview = false
                 } finally {
                     setIsConverting(false)
                 }
             }
 
             setImageFile(fileToProcess)
-            const url = URL.createObjectURL(fileToProcess)
-            setImagePreview(url)
+
+            if (canPreview) {
+                const url = URL.createObjectURL(fileToProcess)
+                setImagePreview(url)
+            } else {
+                // Keep file for upload but no preview (HEIC fallback)
+                setImagePreview('heic-no-preview')
+            }
         }
     }
 
@@ -185,7 +200,7 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                 <label style={{ fontSize: '13px', color: '#F7F2E9' }}>추억의 사진 (선택)</label>
                             </div>
-                            {imagePreview ? (
+                            {imagePreview && imagePreview !== 'heic-no-preview' ? (
                                 <div style={{ position: 'relative', height: '100px', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)', backgroundColor: '#141210' }}>
                                     <img
                                         src={imagePreview}
@@ -197,6 +212,16 @@ export function CompletionModal({ isOpen, onClose, onComplete, bucketTitle }: Co
                                         <Camera size={20} />
                                     </div>
                                     {!isSubmitting && !isConverting && (
+                                        <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '2px', padding: '2px 6px', fontSize: '9px', cursor: 'pointer' }}>REMOVE</button>
+                                    )}
+                                </div>
+                            ) : imagePreview === 'heic-no-preview' ? (
+                                <div style={{ position: 'relative', height: '100px', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(201, 162, 39, 0.3)', backgroundColor: '#141210', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    <Camera size={24} style={{ color: 'rgba(201, 162, 39, 0.5)' }} />
+                                    <span style={{ fontSize: '10px', color: 'rgba(201, 162, 39, 0.6)', letterSpacing: '0.1em' }}>
+                                        {imageFile?.name || 'HEIC IMAGE'} — 업로드 시 변환됩니다
+                                    </span>
+                                    {!isSubmitting && (
                                         <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '2px', padding: '2px 6px', fontSize: '9px', cursor: 'pointer' }}>REMOVE</button>
                                     )}
                                 </div>

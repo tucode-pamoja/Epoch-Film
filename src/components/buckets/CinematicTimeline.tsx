@@ -4,7 +4,8 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bucket } from '@/types'
 import Link from 'next/link'
-import { Filter, ChevronRight, ChevronLeft, Telescope } from 'lucide-react'
+import { Filter, ChevronRight, ChevronLeft, Telescope, Star } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { clsx } from 'clsx'
 
 interface CinematicTimelineProps {
@@ -137,11 +138,31 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
     }, [timelineData, viewMode])
 
     if (buckets.length === 0) return (
-        <div className="w-full flex-1 flex items-center justify-center p-12">
-            <div className="glass-warm border border-white/5 p-12 rounded-sm text-center max-w-sm">
-                <Telescope className="w-10 h-10 text-white/10 mx-auto mb-4" />
-                <p className="text-smoke italic font-light text-sm">아직 관측된 기록이 없습니다.</p>
+        <div className="w-full flex-1 flex flex-col items-center justify-start pt-6 pb-20 text-center animate-fade-in-up">
+            <div className="relative w-20 h-28 bg-darkroom rounded-sm film-border shadow-deep flex items-center justify-center mb-6 group overflow-hidden shrink-0">
+                <div className="absolute inset-0 bg-gold-film/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Star className="text-gold-film/20 group-hover:text-gold-film/40 transition-colors" size={32} />
             </div>
+
+            <div className="space-y-4 w-full max-w-3xl mx-auto px-4">
+                <div className="font-mono-technical text-gold-film tracking-[0.3em] text-[10px]">SCENE 1: THE BEGINNING</div>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display text-celluloid w-full break-keep leading-tight">
+                    모든 훌륭한 영화는 빈 시나리오에서 시작됩니다.
+                </h2>
+                <p className="text-smoke font-light text-sm sm:text-base leading-relaxed w-full break-keep">
+                    아카이브가 현재 비어 있습니다. 당신의 다음 시대의 첫 번째 장면은 무엇인가요?
+                </p>
+            </div>
+
+            <div className="mt-8 shrink-0">
+                <Button href="/archive/new" size="lg" className="rounded-sm px-10 py-5 text-sm">
+                    🎬 시나리오 작성하기
+                </Button>
+            </div>
+
+            <p className="mt-12 text-xs sm:text-sm text-smoke/60 font-light italic tracking-widest w-full break-keep uppercase">
+                "시작하기에 가장 좋은 때는 어제였고, 두 번째로 좋은 때는 지금이다."
+            </p>
         </div>
     )
 

@@ -1,17 +1,32 @@
 import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
-import { getUserStats, getActiveQuests, getUserBuckets } from '../archive/actions'
+import { redirect, notFound } from 'next/navigation'
+import { getUserStats, getUserBuckets, getPublicUserProfile } from '../../archive/actions'
 import { ProfileClient } from '@/components/profile/ProfileClient'
 import { StarField } from '@/components/layout/StarField'
 
-export default async function ProfilePage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/login')
+type Props = {
+    params: Promise<{ id: string }>
+}
 
-    const stats = await getUserStats()
-    const quests = await getActiveQuests()
-    const buckets = await getUserBuckets()
+export default async function UserProfilePage({ params }: Props) {
+    const { id } = await params
+    const supabase = await createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+    // If viewing own profile via ID, redirect to canonical /profile
+    // TEMPORARILY DISABLED FOR TESTING: Allows viewing own profile as "other user"
+    // if (currentUser && currentUser.id === id) {
+    //     redirect('/profile')
+    // }
+
+    // Fetch public profile
+    const targetUser = await getPublicUserProfile(id)
+    if (!targetUser) {
+        notFound()
+    }
+
+    const stats = await getUserStats(id)
+    const buckets = await getUserBuckets(id)
 
     const defaultStats = {
         level: 1,
@@ -35,11 +50,12 @@ export default async function ProfilePage() {
             <div className="relative z-10 flex-1 overflow-y-auto w-full no-scrollbar">
                 <main className="w-full min-h-full pb-20">
                     <ProfileClient
-                        user={user}
+                        user={targetUser}
                         stats={stats || defaultStats}
                         buckets={buckets}
-                        quests={quests}
-                        currentUserId={user.id}
+                        quests={[]} // Hide quests for other users
+                        isOwnProfile={false}
+                        currentUserId={currentUser?.id}
                     />
                 </main>
             </div>

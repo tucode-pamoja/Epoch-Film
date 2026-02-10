@@ -1,155 +1,156 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Ticket, User, PlayCircle, Trophy, ChevronDown, Film, Loader2 } from 'lucide-react'
+import { Search, User, PlayCircle, Trophy, ChevronDown, Film, Loader2, X, Ticket, Copy } from 'lucide-react'
 import { SceneCard } from '@/components/buckets/SceneCard'
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import { getPublicBuckets } from '@/app/archive/actions'
 import { NotificationBell } from '../layout/NotificationBell'
+import { FollowButton } from './FollowButton'
 
 interface ExploreClientProps {
     initialBuckets: any[]
+    currentUserId?: string
 }
 
-export function ExploreClient({ initialBuckets }: ExploreClientProps) {
-    const [activeTab, setActiveTab] = useState<'ACHIEVED' | 'ACTIVE'>('ACHIEVED')
+export function ExploreClient({ initialBuckets, currentUserId }: ExploreClientProps) {
     const [searchTerm, setSearchTerm] = useState('')
-    const [activeCategory, setActiveCategory] = useState('ALL')
-    const [isSearchOpen, setIsSearchOpen] = useState(false)
+    const [focusedId, setFocusedId] = useState<string | null>(null)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
-    const categories = [
-        { id: 'ALL', label: '전체 (ALL)' },
-        { id: '여행', label: '여행 (TRAVEL)' },
-        { id: '음식', label: '음식 (FOOD)' },
-        { id: '성장', label: '성장 (GROWTH)' },
-        { id: '운동', label: '운동 (SPORTS)' },
-        { id: '문화', label: '문화 (CULTURE)' }
-    ]
+    const fetchMore = useCallback(async (page: number) => {
+        // Fetch buckets for the given page
+        return await getPublicBuckets(page, 12, undefined, 'ALL', searchTerm.trim(), false)
+    }, [searchTerm])
 
-    const fetchMore = async (page: number) => {
-        return await getPublicBuckets(page + 1, 12, activeTab, activeCategory, searchTerm)
+    const { items, setItems, loading, hasMore, loadMoreRef, setPage, setHasMore, loadingRef } = useInfiniteScroll(fetchMore, {
+        pageSize: 12,
+        initialItems: initialBuckets
+    })
+
+    const performSearch = async (term: string) => {
+        const trimmedSearch = term.trim()
+
+        // Block other fetches during search reset
+        if (loadingRef?.current) return
+
+        setPage(0)
+        // Fetch all statuses for search results starting from page 0
+        const filtered = await getPublicBuckets(0, 12, undefined, 'ALL', trimmedSearch, false)
+        setItems(filtered)
+        setHasMore(filtered.length === 12)
     }
 
-    const { items, setItems, loading, hasMore, loadMoreRef, setPage, setHasMore } = useInfiniteScroll(fetchMore)
-
-    // Handle Search Debounce & Filter Change
+    // Intersection Observer to detect focused card
     useEffect(() => {
-        const timer = setTimeout(async () => {
-            setPage(0)
-            const filtered = await getPublicBuckets(0, 12, activeTab, activeCategory, searchTerm)
-            setItems(filtered)
-            setHasMore(filtered.length === 12)
+        const options = {
+            root: scrollContainerRef.current,
+            threshold: 0.6,
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    setFocusedId(entry.target.getAttribute('data-id'))
+                }
+            })
+        }, options)
+
+        const currentRefs = sectionRefs.current
+        Object.values(currentRefs).forEach((ref) => {
+            if (ref) observer.observe(ref)
+        })
+
+        return () => {
+            Object.values(currentRefs).forEach((ref) => {
+                if (ref) observer.unobserve(ref)
+            })
+        }
+    }, [items])
+
+    const isInitialMount = useRef(true)
+
+    // Handle Search Debounce
+    useEffect(() => {
+        // Skip redundant fetch on mount if search is empty (initialBuckets already handled it)
+        if (isInitialMount.current && searchTerm === '') {
+            isInitialMount.current = false
+            return
+        }
+
+        const timer = setTimeout(() => {
+            performSearch(searchTerm)
         }, 500)
 
         return () => clearTimeout(timer)
-    }, [searchTerm, activeCategory, activeTab, setPage, setItems, setHasMore])
+    }, [searchTerm])
 
-    const tabs = [
-        { id: 'ACHIEVED', label: '달성한 목표', icon: Trophy },
-        { id: 'ACTIVE', label: '계획중인 목표', icon: PlayCircle }
-    ]
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur() // Close mobile keyboard
+            performSearch(searchTerm) // Immediate search without debounce
+        }
+    }
+
+    // Lock body scroll and remove padding for a full-screen experience
+    useEffect(() => {
+        const originalPadding = document.body.style.paddingBottom
+        const originalOverflow = document.body.style.overflow
+
+        document.body.style.overflow = 'hidden'
+        document.body.style.paddingBottom = '0px'
+
+        return () => {
+            document.body.style.overflow = originalOverflow
+            document.body.style.paddingBottom = originalPadding
+        }
+    }, [])
+
 
     return (
         <div className="h-full w-full flex flex-col bg-void text-white">
-            {/* 1. Interactive Navigation HUD */}
-            <div className="fixed top-0 left-0 right-0 z-[100] flex justify-center pt-8 pointer-events-none h-48 group/nav">
-                {/* Hit Area Trigger */}
-                <div className="absolute inset-0 pointer-events-auto" />
-
-                <div className="absolute top-8 right-8 pointer-events-auto transition-all duration-700 opacity-0 -translate-y-4 group-hover/nav:opacity-100 group-hover/nav:translate-y-0 flex items-center gap-4">
-                    <button
-                        onClick={() => setIsSearchOpen(!isSearchOpen)}
-                        className={`p-2 rounded-full border transition-all ${isSearchOpen ? 'bg-gold-film text-void border-gold-film' : 'bg-white/5 text-smoke border-white/10 hover:text-white'}`}
-                    >
-                        <Film size={20} />
-                    </button>
-                    <NotificationBell />
-                </div>
-
-                <div className="relative flex flex-col items-center gap-6 transition-all duration-700 opacity-0 -translate-y-4 group-hover/nav:opacity-100 group-hover/nav:translate-y-0 pointer-events-auto w-full max-w-xl px-6">
-                    {/* Tab Selector */}
-                    <div className="flex items-center gap-1 p-1 bg-void/60 backdrop-blur-3xl rounded-full border border-white/10 shadow-huge">
-                        {tabs.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`
-                                    flex items-center gap-2 px-6 py-2 rounded-full text-[11px] font-display transition-all
-                                    ${activeTab === tab.id
-                                        ? 'bg-gold-film text-velvet shadow-warm font-bold'
-                                        : 'text-smoke hover:text-white'
-                                    }
-                                `}
-                            >
-                                <tab.icon size={13} />
-                                <span className="whitespace-nowrap">{tab.label}</span>
-                            </button>
-                        ))}
+            {/* 1. Cinematic Discover Header (Fixed at Top) */}
+            <header className="fixed top-0 left-0 right-0 z-[100] bg-void/60 backdrop-blur-3xl border-b border-white/5 py-4 shadow-2xl">
+                <div className="max-w-4xl mx-auto px-6">
+                    {/* Top Row: Persistent Search Bar & Notification */}
+                    <div className="flex items-center gap-6">
+                        <div className="flex-1 relative group">
+                            <input
+                                type="text"
+                                placeholder="어떤 페하의 이야기를 찾으시나요? (감독, 제목, 키워드)"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                className="w-full bg-white/5 border border-white/10 rounded-full px-14 py-2.5 text-sm focus:outline-none focus:border-gold-film/50 focus:bg-white/10 transition-all font-light placeholder:text-smoke/20 italic"
+                            />
+                            <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gold-film/40 group-focus-within:text-gold-film transition-colors">
+                                <Search size={20} />
+                            </div>
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-6 top-1/2 -translate-y-1/2 text-smoke/40 hover:text-white transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            )}
+                        </div>
+                        <div className="shrink-0 scale-110">
+                            <NotificationBell />
+                        </div>
                     </div>
-
-                    {/* Category Filter HUD */}
-                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-4 bg-white/5 backdrop-blur-md rounded-full border border-white/5">
-                        {categories.map((cat) => (
-                            <button
-                                key={cat.id}
-                                onClick={() => setActiveCategory(cat.id)}
-                                className={`
-                                    px-4 py-1 rounded-full text-[10px] whitespace-nowrap font-mono-technical transition-all
-                                    ${activeCategory === cat.id
-                                        ? 'text-gold-film bg-white/10'
-                                        : 'text-smoke/60 hover:text-white hover:bg-white/5'
-                                    }
-                                `}
-                            >
-                                {cat.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Search Console */}
-                    <AnimatePresence>
-                        {isSearchOpen && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10, width: '60%' }}
-                                animate={{ opacity: 1, y: 0, width: '100%' }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="relative group/search"
-                            >
-                                <input
-                                    type="text"
-                                    placeholder="감독 또는 제목 검색... (SEARCH_STORY)"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full bg-void/80 border border-gold-film/30 rounded-sm px-10 py-3 text-sm focus:outline-none focus:border-gold-film transition-all font-light placeholder:text-smoke/30 italic"
-                                    autoFocus
-                                />
-                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gold-film/40">
-                                    <Film size={16} />
-                                </div>
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm('')}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-mono-technical text-smoke/40 hover:text-red-400"
-                                    >
-                                        RESET_FILTER
-                                    </button>
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
                 </div>
-            </div>
+            </header>
 
-            {/* 2. Main Snap Feed */}
             <div
                 ref={scrollContainerRef}
-                className="flex-1 w-full overflow-y-auto snap-y snap-mandatory no-scrollbar scroll-smooth pt-32"
+                className="flex-1 w-full overflow-y-auto overscroll-y-none snap-y snap-mandatory no-scrollbar scroll-smooth pt-20"
             >
                 <AnimatePresence mode="wait">
                     <motion.div
-                        key={`${activeTab}-${activeCategory}-${searchTerm}`}
+                        key={`unified-feed-${searchTerm}`}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -161,11 +162,11 @@ export function ExploreClient({ initialBuckets }: ExploreClientProps) {
                                     key={bucket.id}
                                     className="h-[100dvh] w-full snap-start snap-always flex items-center justify-center relative px-6"
                                 >
-                                    <div className="w-full max-w-[340px] flex flex-col gap-6 -translate-y-8">
+                                    <div className="w-full max-w-[340px] flex flex-col gap-4 -translate-y-4">
                                         {/* Creator Badge */}
                                         <div className="flex items-center justify-between px-1">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full border border-gold-film/20 bg-darkroom flex items-center justify-center shrink-0 overflow-hidden">
+                                                <div className="w-8 h-8 rounded-full border border-gold-film/20 bg-darkroom flex items-center justify-center shrink-0 overflow-hidden">
                                                     {bucket.users?.profile_image_url ? (
                                                         <img src={bucket.users.profile_image_url} alt="" className="w-full h-full object-cover" />
                                                     ) : (
@@ -178,17 +179,24 @@ export function ExploreClient({ initialBuckets }: ExploreClientProps) {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-[10px] font-mono-technical text-gold-film font-bold">{(bucket.tickets || 0).toLocaleString()} TICKETS</span>
+                                            <div className="flex items-center gap-4">
+                                                <FollowButton targetId={bucket.user_id} currentUserId={currentUserId} />
                                             </div>
                                         </div>
 
                                         {/* The Poster (Main Attraction) */}
-                                        <div className="relative aspect-[3/4] w-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] rounded-lg overflow-hidden group">
+                                        <div
+                                            ref={(el) => { sectionRefs.current[bucket.id] = el }}
+                                            data-id={bucket.id}
+                                            className="relative aspect-[4/5] w-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)] rounded-lg overflow-hidden group"
+                                        >
                                             <SceneCard
                                                 bucket={bucket}
                                                 isPublic={true}
+                                                isFocused={focusedId === bucket.id}
                                             />
+
+
                                         </div>
 
                                         {/* Scroll Guide */}

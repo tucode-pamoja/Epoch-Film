@@ -164,14 +164,10 @@ export default async function BucketDetailPage({ params }: PageProps) {
     )
   }
 
-  // Fetch real bucket details
-  const { data: bucket, error } = await supabase
-    .from('buckets')
-    .select('*')
-    .eq('id', id)
-    .single()
+  // Fetch real bucket details with creator info using the shared action
+  const bucket = await getBucket(id)
 
-  if (error || !bucket) {
+  if (!bucket) {
     notFound()
   }
 

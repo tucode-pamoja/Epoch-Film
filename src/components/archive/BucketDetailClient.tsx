@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useOptimistic } from 'react'
+import { useState, useTransition, useOptimistic, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Ticket,
@@ -24,8 +24,12 @@ import {
     Lock,
     AlertTriangle,
     Clapperboard,
+    Check,
+    Copy,
+    Users,
     Loader2,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Star
 } from 'lucide-react'
 import Image from 'next/image'
 import { CinematicImage } from '@/components/archive/CinematicImage'
@@ -36,8 +40,11 @@ import { Button } from '@/components/ui/Button'
 import { AddRecordModal } from '@/components/archive/AddRecordModal'
 import { CommentSection } from '@/components/archive/comments/CommentSection'
 import { ShareButton } from '@/components/archive/ShareButton'
-import { saveMemory, updateBucket, updateMemory, deleteMemory, setBucketThumbnail, issueTicket } from '@/app/archive/actions'
+import { RemakeModal } from '@/components/archive/RemakeModal'
+import { CastingModal } from '@/components/archive/CastingModal'
+import { saveMemory, updateBucket, updateMemory, deleteMemory, updateMemoryCaption, updateMemoryImage, setBucketThumbnail, issueTicket, remakeBucket, inviteCast, getMutualFollowers, deleteBucket } from '@/app/archive/actions'
 import { toast } from 'sonner'
+
 
 interface BucketDetailClientProps {
     bucket: any
@@ -50,17 +57,18 @@ interface BucketDetailClientProps {
 
 export function BucketDetailClient({ bucket, memories, letters, comments, currentUserId, hasIssuedTicket: initialHasIssuedTicket = false }: BucketDetailClientProps) {
     const isOwner = currentUserId === bucket.user_id
-    const [activeTab, setActiveTab] = useState<'RECORD' | 'ROADMAP' | 'COMMENTS'>('RECORD')
+    const [activeTab, setActiveTab] = useState<'RECORD' | 'FOOTPRINTS' | 'ROADMAP' | 'COMMENTS'>(bucket.is_routine ? 'FOOTPRINTS' : 'RECORD')
     const [isAddRecordOpen, setIsAddRecordOpen] = useState(false)
     const [isMoreHorizontalOpen, setIsMoreHorizontalOpen] = useState(false)
     const [isEditOpen, setIsEditOpen] = useState(false)
     const [isEditRecordOpen, setIsEditRecordOpen] = useState(false)
     const [editingRecord, setEditingRecord] = useState<any>(null)
+    const [hasIssuedTicket, setHasIssuedTicket] = useState(initialHasIssuedTicket)
     const [isPending, startTransition] = useTransition()
 
     // Optimistic State for Tickets
     const [optimisticTicketState, addOptimisticTicket] = useOptimistic(
-        { hasIssued: initialHasIssuedTicket, count: bucket.tickets || 0 },
+        { hasIssued: hasIssuedTicket, count: bucket.tickets || 0 },
         (state, newHasIssued: boolean) => ({
             hasIssued: newHasIssued,
             count: newHasIssued ? state.count + 1 : state.count - 1
@@ -76,6 +84,43 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
     })
 
     const router = useRouter()
+
+    // Casting Modal State (To be implemented)
+    const [isCastingModalOpen, setIsCastingModalOpen] = useState(false)
+    const [isRemakeModalOpen, setIsRemakeModalOpen] = useState(false)
+
+    const handleRemake = () => {
+        setIsRemakeModalOpen(true)
+    }
+
+    const confirmRemake = () => {
+        startTransition(async () => {
+            try {
+                const newBucket = await remakeBucket(bucket.id)
+                toast.success('시나리오가 성공적으로 리메이크되었습니다.')
+                setIsRemakeModalOpen(false)
+                router.push(`/archive/${newBucket.id}`)
+            } catch (error) {
+                console.error(error)
+                toast.error('리메이크에 실패했습니다. (콘솔 확인)')
+            }
+        })
+    }
+
+    const handleDeleteBucket = async () => {
+        setIsMoreHorizontalOpen(false)
+        startTransition(async () => {
+            try {
+                await deleteBucket(bucket.id)
+                toast.success('에포크 필름이 성공적으로 파기되었습니다.')
+                router.push('/')
+            } catch (error) {
+                console.error(error)
+                toast.error('필름 파기에 실패했습니다.')
+            }
+        })
+    }
+
 
     const handleAdmit = async () => {
         if (optimisticTicketState.hasIssued) return
@@ -166,10 +211,40 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
         startTransition(async () => {
             try {
                 await setBucketThumbnail(bucket.id, imageUrl)
-                toast.success('Thumbnail updated')
+                setFootprintMenuId(null)
+                toast.success('대표 이미지가 설정되었습니다')
                 router.refresh()
             } catch (err) {
-                toast.error('Set thumbnail failed')
+                toast.error('대표 이미지 설정에 실패했습니다')
+            }
+        })
+    }
+
+    // Image update logic for footprints
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [updatingImageMemoryId, setUpdatingImageMemoryId] = useState<string | null>(null)
+
+    const handleImageUpdateClick = (memoryId: string) => {
+        setUpdatingImageMemoryId(memoryId)
+        fileInputRef.current?.click()
+    }
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file || !updatingImageMemoryId) return
+
+        const formData = new FormData()
+        formData.append('image', file)
+
+        startTransition(async () => {
+            try {
+                await updateMemoryImage(updatingImageMemoryId, bucket.id, formData)
+                toast.success('이미지가 변경되었습니다')
+            } catch (err) {
+                toast.error('이미지 변경에 실패했습니다')
+            } finally {
+                setUpdatingImageMemoryId(null)
+                if (fileInputRef.current) fileInputRef.current.value = ''
             }
         })
     }
@@ -178,6 +253,142 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
         const d = new Date(dateString)
         return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
     }
+
+    const DAY_NAMES_KR = ['일', '월', '화', '수', '목', '금', '토']
+    const formatDateWithDay = (dateString: string) => {
+        const d = new Date(dateString)
+        const dayName = DAY_NAMES_KR[d.getDay()]
+        return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} (${dayName})`
+    }
+
+    // Calculate routine streak (combo) based on frequency
+    const routineStreak = useMemo(() => {
+        if (!bucket.is_routine || memories.length === 0) return 0
+
+        const sorted = [...memories].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+        if (bucket.routine_frequency === 'DAILY') {
+            // DAILY: check consecutive calendar days backward from today
+            let streak = 0
+            const now = new Date()
+            let checkDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+            // Check if there's a completion today first
+            const hasToday = sorted.some(m => new Date(m.created_at).toDateString() === checkDate.toDateString())
+            if (!hasToday) {
+                // Check yesterday (allow 1 day grace)
+                checkDate.setDate(checkDate.getDate() - 1)
+                const hasYesterday = sorted.some(m => new Date(m.created_at).toDateString() === checkDate.toDateString())
+                if (!hasYesterday) return 0
+            }
+
+            // Walk backward from the check point
+            for (let dayOffset = hasToday ? 0 : 1; ; dayOffset++) {
+                const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOffset)
+                const hasCompletion = sorted.some(m => new Date(m.created_at).toDateString() === target.toDateString())
+                if (hasCompletion) { streak++ } else { break }
+            }
+            return streak
+        }
+
+        if (bucket.routine_frequency === 'WEEKLY') {
+            // WEEKLY: group by ISO week, check if each week meets the required number of completions
+            const requiredPerWeek = bucket.routine_days?.length || 1
+
+            // Helper: get Monday of the week for a date
+            const getWeekStart = (d: Date) => {
+                const day = d.getDay()
+                const diff = d.getDate() - day + (day === 0 ? -6 : 1) // Monday
+                return new Date(d.getFullYear(), d.getMonth(), diff)
+            }
+
+            const getWeekKey = (d: Date) => {
+                const ws = getWeekStart(d)
+                return `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
+            }
+
+            // Group memories by week
+            const weekMap = new Map<string, number>()
+            sorted.forEach(m => {
+                const key = getWeekKey(new Date(m.created_at))
+                weekMap.set(key, (weekMap.get(key) || 0) + 1)
+            })
+
+            // Walk backward from current week
+            const now = new Date()
+            let streak = 0
+            let currentWeekStart = getWeekStart(now)
+
+            // Check current week: might be in progress, so check if previous week was met
+            const currentWeekKey = getWeekKey(now)
+            const currentWeekCount = weekMap.get(currentWeekKey) || 0
+
+            // If current week already meets quota, count it
+            if (currentWeekCount >= requiredPerWeek) {
+                streak++
+            }
+
+            // Walk backward through previous weeks
+            for (let weekOffset = 1; weekOffset <= 52; weekOffset++) {
+                const weekStart = new Date(currentWeekStart.getTime() - weekOffset * 7 * 24 * 60 * 60 * 1000)
+                const weekKey = getWeekKey(weekStart)
+                const count = weekMap.get(weekKey) || 0
+                if (count >= requiredPerWeek) { streak++ } else { break }
+            }
+
+            return streak
+        }
+
+        if (bucket.routine_frequency === 'MONTHLY') {
+            // MONTHLY: check consecutive calendar months
+            let streak = 0
+            const now = new Date()
+
+            for (let monthOffset = 0; monthOffset <= 12; monthOffset++) {
+                const targetMonth = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1)
+                const hasCompletion = sorted.some(m => {
+                    const d = new Date(m.created_at)
+                    return d.getMonth() === targetMonth.getMonth() && d.getFullYear() === targetMonth.getFullYear()
+                })
+                if (hasCompletion) { streak++ } else { break }
+            }
+            return streak
+        }
+
+        return 0
+    }, [bucket, memories])
+
+    // Footprint editing state
+    const [editingFootprintId, setEditingFootprintId] = useState<string | null>(null)
+    const [editingCaption, setEditingCaption] = useState('')
+    const [footprintMenuId, setFootprintMenuId] = useState<string | null>(null)
+
+    const handleFootprintEdit = async (memoryId: string) => {
+        if (!editingCaption.trim()) return
+        startTransition(async () => {
+            try {
+                await updateMemoryCaption(memoryId, bucket.id, editingCaption.trim())
+                setEditingFootprintId(null)
+                toast.success('기록이 수정되었습니다')
+            } catch {
+                toast.error('수정에 실패했습니다')
+            }
+        })
+    }
+
+    const handleFootprintDelete = async (memoryId: string) => {
+        if (!confirm('이 발자취를 삭제하시겠습니까?')) return
+        startTransition(async () => {
+            try {
+                await deleteMemory(memoryId, bucket.id)
+                setFootprintMenuId(null)
+                toast.success('발자취가 삭제되었습니다')
+            } catch {
+                toast.error('삭제에 실패했습니다')
+            }
+        })
+    }
+
 
     const handleRecordSubmit = async (data: {
         image?: File;
@@ -224,35 +435,40 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     const tabs = [
-        { id: 'RECORD', label: 'THE RECORD', icon: Camera },
+        ...(!bucket.is_routine ? [{ id: 'RECORD', label: 'THE RECORD', icon: Camera }] : []),
+        ...(bucket.is_routine ? [{ id: 'FOOTPRINTS', label: 'FOOTPRINTS', icon: Film }] : []),
         { id: 'ROADMAP', label: 'DIRECTOR\'S CUT', icon: Sparkles },
         { id: 'COMMENTS', label: 'REVIEWS', icon: MessageSquare },
     ]
 
     return (
-        <div className="relative min-h-screen bg-void text-celluloid selection:bg-gold-film/30 overflow-x-hidden w-full flex flex-col items-center">
+        <div className="relative min-h-screen bg-void pb-32 w-full flex flex-col items-center overflow-x-hidden">
             <AnimatePresence>
                 {isPending && (
                     <motion.div
-                        initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-                        animate={{ opacity: 1, backdropFilter: 'blur(4px)' }}
-                        exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-                        className="fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-void/10 pointer-events-none"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-none"
+                        key="bucket-pending-overlay"
                     >
-                        <div className="bg-void/80 backdrop-blur-xl border border-gold-film/20 rounded-full px-6 py-3 flex items-center gap-3 shadow-huge">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-black/80 rounded-full border border-gold-film/20 shadow-lg">
                             <Loader2 className="w-4 h-4 text-gold-film animate-spin" />
-                            <span className="font-mono-technical text-[10px] text-gold-film tracking-[0.3em] uppercase">Updating_Archive...</span>
+                            <span className="font-mono-technical text-[10px] text-gold-film tracking-[0.3em] uppercase">PROCESSING...</span>
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
             <motion.div
+                key="content"
+                initial={{ opacity: 0 }}
                 animate={{
-                    filter: isPending ? 'blur(4px) grayscale(0.5)' : 'blur(0px) grayscale(0)',
-                    opacity: isPending ? 0.7 : 1,
-                    scale: isPending ? 0.99 : 1
+                    opacity: 1,
+                    scale: isPending ? 0.98 : 1,
+                    filter: isPending ? 'grayscale(0.5)' : 'none'
                 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.5 }}
                 className="w-full flex flex-col items-center"
             >
@@ -274,11 +490,42 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                 <div className="relative z-10 max-w-5xl w-full px-6 py-12 space-y-12">
                     {/* Back Link & Actions */}
                     <div className="flex items-center justify-between">
-                        <Link href="/" className="group inline-flex items-center gap-2 text-smoke hover:text-gold-film transition-colors">
+                        <button
+                            onClick={() => {
+                                if (window.history.length > 1) {
+                                    router.back();
+                                } else {
+                                    router.push('/');
+                                }
+                            }}
+                            className="group inline-flex items-center gap-2 text-smoke hover:text-gold-film transition-colors"
+                        >
                             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
                             <span className="font-mono-technical text-[10px] tracking-widest uppercase">CLOSE_PRODUCTION</span>
-                        </Link>
-                        <ShareButton title={bucket.title} url={`/archive/${bucket.id}`} />
+                        </button>
+
+
+
+                        <div className="flex items-center gap-3">
+                            {isOwner ? (
+                                <button
+                                    onClick={() => setIsCastingModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-sm border border-white/10 bg-white/5 hover:bg-white/10 text-[10px] font-mono-technical text-smoke transition-colors tracking-widest"
+                                >
+                                    <Users size={12} />
+                                    CASTING
+                                </button>
+                            ) : !bucket.original_bucket_id ? (
+                                <button
+                                    onClick={handleRemake}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-sm border border-gold-film/30 bg-gold-film/5 hover:bg-gold-film/10 text-[10px] font-mono-technical text-gold-film transition-colors tracking-widest"
+                                >
+                                    <Copy size={12} />
+                                    REMAKE_SCENE
+                                </button>
+                            ) : null}
+                            <ShareButton title={bucket.title} url={`/archive/${bucket.id}`} />
+                        </div>
                     </div>
                     {/* Cinematic Hero Section - Portrait Poster Style (Fitted & Proportional) */}
                     <section className="relative h-[70vh] sm:h-[85vh] aspect-[3/4] sm:aspect-[2/3] w-full max-w-[420px] mx-auto flex flex-col justify-between p-5 sm:p-8 rounded-lg overflow-hidden border border-white/10 shadow-huge group mb-12 sm:mb-24">
@@ -298,10 +545,32 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                             )}
                         </div>
 
+
+
                         {/* Content Layer - Centered Title & Description */}
                         <div className="relative z-10 w-full flex-grow flex flex-col items-center justify-center text-center py-4">
                             <div className="space-y-4 w-full px-4">
-                                <h1 className="text-3xl sm:text-4xl md:text-5xl font-display leading-[1.1] text-white tracking-tight drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)] uppercase break-keep">
+                                {bucket.original_bucket_id && (
+                                    bucket.original_bucket ? (
+                                        <Link
+                                            href={`/archive/${bucket.original_bucket_id}`}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-gold-film/10 border border-gold-film/30 rounded-full backdrop-blur-md mb-4 hover:bg-gold-film/20 transition-all group/remake"
+                                        >
+                                            <Copy size={10} className="text-gold-film" />
+                                            <span className="text-[9px] font-mono-technical text-gold-film/80 tracking-widest uppercase group-hover/remake:text-gold-film">
+                                                REMAKE FROM: {bucket.original_bucket.users?.nickname || 'BONG JOON-HO'}
+                                            </span>
+                                        </Link>
+                                    ) : (
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full backdrop-blur-md mb-4 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
+                                            <AlertTriangle size={10} className="text-red-500" />
+                                            <span className="text-[9px] font-mono-technical text-red-500/80 tracking-widest uppercase">
+                                                ORIGINAL REEL SCRAPPED
+                                            </span>
+                                        </div>
+                                    )
+                                )}
+                                <h1 className="text-2xl sm:text-3xl md:text-4xl font-display leading-[1.1] text-white tracking-tight drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)] uppercase break-keep">
                                     {bucket.title}
                                 </h1>
 
@@ -327,7 +596,7 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                 <div className="relative flex flex-col shadow-huge overflow-hidden">
                                     {/* The Glass Base with Masking */}
                                     <div
-                                        className="absolute inset-0 bg-white/5 backdrop-blur-3xl border border-white/10"
+                                        className="absolute inset-0 bg-black/60 backdrop-blur-2xl border border-white/10"
                                         style={{
                                             WebkitMaskImage: `
                                             radial-gradient(circle 8px at 0 25%, transparent 100%, black 0),
@@ -342,45 +611,82 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
 
                                     {/* Ticket Content */}
                                     <div className="relative z-10 flex flex-col w-full divide-y divide-dashed divide-white/10">
-                                        {/* TOP: DIRECTOR & STATUS */}
                                         <div className="p-3 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                                                    <User size={10} className="text-gold-film/60" />
-                                                </div>
-                                                <div className="flex flex-col leading-none">
-                                                    <p className="font-mono-technical text-[6px] text-smoke/40 tracking-[0.2em] uppercase">Executor</p>
-                                                    <span className="text-[9px] font-display text-gold-warm tracking-tight">AGENT_{bucket.user_id?.slice(0, 5).toUpperCase() || 'USER'}</span>
-                                                </div>
+                                            <div className="flex items-center gap-3">
+                                                <Link href={`/profile/${bucket.user_id}`} className="flex items-center gap-2 hover:bg-white/5 p-1 -ml-1 pr-2 rounded transition-colors group/executor">
+                                                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden relative">
+                                                        {bucket.users?.profile_image_url ? (
+                                                            <img
+                                                                src={bucket.users.profile_image_url}
+                                                                alt="Profile"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <User size={10} className="text-gold-film/60" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-col leading-none">
+                                                        <p className="font-mono-technical text-[6px] text-white/50 tracking-[0.2em] uppercase group-hover/executor:text-gold-film/60 transition-colors">Director</p>
+                                                        <span className="text-[9px] font-display text-gold-warm tracking-tight group-hover/executor:text-gold-film transition-colors">
+                                                            {bucket.users?.nickname || `AGENT_${bucket.user_id?.slice(0, 5).toUpperCase()}`}
+                                                        </span>
+                                                    </div>
+                                                </Link>
                                             </div>
-                                            <div className="px-1 py-0.5 bg-white/5 border border-white/10 rounded-sm">
-                                                <span className="text-[6px] font-mono-technical text-smoke/40 uppercase tracking-widest leading-none">SID: {bucket.id?.slice(0, 8) || '0000'}</span>
+
+                                            <div className="px-1 py-0.5 bg-white/10 border border-white/15 rounded-sm">
+                                                <span className="text-[6px] font-mono-technical text-white/50 uppercase tracking-widest leading-none">SID: {bucket.id?.slice(0, 8) || '0000'}</span>
                                             </div>
                                         </div>
 
                                         {/* BOTTOM: METADATA GRID */}
-                                        <div className="p-4 sm:p-5 grid grid-cols-2 gap-y-4 gap-x-2">
+                                        <div className="p-4 sm:p-5 pb-8 grid grid-cols-2 gap-y-4 gap-x-2">
                                             <div className="space-y-1 col-span-2 sm:col-span-1">
-                                                <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Genre / Type</p>
-                                                <p className="text-[10px] sm:text-[11px] font-display text-smoke font-medium tracking-widest truncate uppercase">
+                                                <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.2em] uppercase">Genre / Type</p>
+                                                <p className="text-[10px] sm:text-[11px] font-display text-white font-medium tracking-widest truncate uppercase">
                                                     {bucket.category || 'CINEMA'}
-                                                    <span className="mx-2 text-white/10">|</span>
-                                                    <span className="text-gold-film/80">{bucket.target_date ? 'Yearly Scene' : 'My Epoch'}</span>
+                                                    <span className="mx-2 text-white/20">|</span>
+                                                    <span className="text-gold-film/80">{bucket.is_routine ? 'ROUTINE' : (bucket.target_date ? 'Yearly Scene' : 'My Epoch')}</span>
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
-                                                <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Premiere</p>
+                                                <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.2em] uppercase">Premiere</p>
                                                 <p className="text-[10px] sm:text-[11px] font-mono-technical text-celluloid font-bold">{formatDate(bucket?.created_at || new Date().toISOString())}</p>
                                             </div>
+
                                             <div onClick={handleAdmit} className="space-y-1 cursor-pointer group/stat">
-                                                <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Admit_One</p>
+                                                <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.2em] uppercase">Admit_One</p>
                                                 <div className="flex items-center gap-2">
                                                     <Ticket size={12} className={`transition-colors ${optimisticTicketState.hasIssued ? 'text-gold-film fill-gold-film' : 'text-smoke/40 group-hover/stat:text-gold-film'}`} />
                                                     <span className={`text-[11px] font-mono-technical font-bold ${optimisticTicketState.hasIssued ? 'text-gold-film' : 'text-smoke/60'}`}>{optimisticTicketState.count.toLocaleString()}</span>
                                                 </div>
                                             </div>
+
+                                            <div className="space-y-1 group/remake_stat">
+                                                <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.2em] uppercase">Remakes</p>
+                                                <div className="flex items-center gap-2">
+                                                    <Copy size={11} className="text-smoke/40 group-hover/remake_stat:text-gold-film transition-colors" />
+                                                    <span className="text-[11px] font-mono-technical font-bold text-smoke/60 group-hover/remake_stat:text-gold-film transition-colors uppercase">
+                                                        {bucket.original_bucket_id ? 'REMAKED' : (bucket.remake_count || 0)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {bucket.is_routine && (
+                                                <div className="space-y-1">
+                                                    <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.2em] uppercase">Production_Cycle</p>
+                                                    <p className="text-[10px] sm:text-[11px] font-mono-technical text-cyan-film font-bold">
+                                                        {bucket.routine_frequency}
+                                                        {bucket.routine_days && bucket.routine_days.length > 0 && (
+                                                            <span className="text-smoke/40 ml-1 text-[8px]">
+                                                                ({bucket.routine_days.map((d: number) => ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d]).join('')})
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             <div className="space-y-1">
-                                                <p className="font-mono-technical text-[7px] text-smoke/40 tracking-[0.2em] uppercase opacity-50">Manage</p>
+                                                <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.2em] uppercase">Manage</p>
                                                 <div className="flex items-center gap-2 relative">
                                                     <button onClick={() => setIsMoreHorizontalOpen(!isMoreHorizontalOpen)} className="p-1.5 bg-white/5 rounded-full hover:bg-white/10 transition-all">
                                                         <MoreHorizontal size={14} className="text-smoke/60" />
@@ -398,10 +704,23 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                                                     <span>SHARE REEL</span>
                                                                 </button>
                                                                 {isOwner && (
-                                                                    <button onClick={() => { setIsMoreHorizontalOpen(false); setIsEditOpen(true); }} className="w-full px-3 py-2 flex items-center gap-2 text-[10px] text-smoke hover:bg-white/5 transition-colors text-left">
-                                                                        <Pencil size={10} className="text-gold-film/60" />
-                                                                        <span>EDIT PRODUCTION</span>
-                                                                    </button>
+                                                                    <>
+                                                                        <button onClick={() => { setIsMoreHorizontalOpen(false); setIsEditOpen(true); }} className="w-full px-3 py-2 flex items-center gap-2 text-[10px] text-smoke hover:bg-white/5 transition-colors border-b border-white/5 text-left">
+                                                                            <Pencil size={10} className="text-gold-film/60" />
+                                                                            <span>EDIT PRODUCTION</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (confirm('정말로 이 필름을 파기하시겠습니까? (삭제된 필름은 복구할 수 없습니다)')) {
+                                                                                    handleDeleteBucket();
+                                                                                }
+                                                                            }}
+                                                                            className="w-full px-3 py-2 flex items-center gap-2 text-[10px] text-red-500/60 hover:text-red-500 hover:bg-red-500/5 transition-colors text-left"
+                                                                        >
+                                                                            <Trash2 size={10} />
+                                                                            <span>SCRAP PRODUCTION</span>
+                                                                        </button>
+                                                                    </>
                                                                 )}
                                                             </motion.div>
                                                         )}
@@ -584,6 +903,179 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                                 >
                                                     ADD FIRST FRAME
                                                 </Button>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+                                {activeTab === 'FOOTPRINTS' && (
+                                    <motion.div
+                                        key="footprints"
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 10 }}
+                                        className="space-y-8"
+                                    >
+                                        {/* Routine Stats Header */}
+                                        <div className="flex items-center justify-between">
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                onChange={handleFileChange}
+                                                accept="image/*"
+                                                className="hidden"
+                                            />
+                                            <h4 className="text-[10px] sm:text-xs font-mono-technical text-smoke/40 tracking-[0.3em] uppercase underline decoration-gold-film/30 underline-offset-8">Production_Footprints</h4>
+                                            <div className="flex items-center gap-4">
+                                                <span className="font-mono-technical text-[9px] text-smoke/50 tracking-widest uppercase">
+                                                    Total: <span className="text-gold-film font-bold">{memories.length}</span>
+                                                </span>
+                                                {routineStreak >= 2 && (
+                                                    <span className="font-mono-technical text-[9px] tracking-widest uppercase px-2 py-0.5 rounded-sm bg-orange-500/10 border border-orange-500/30 text-orange-400">
+                                                        🔥 {routineStreak} COMBO
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {memories.length > 0 ? (
+                                            <div className="relative pl-8 border-l border-white/5 space-y-10">
+                                                {[...memories].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((m, idx) => {
+                                                    const footprintNumber = memories.length - idx
+                                                    return (
+                                                        <div key={m.id} className="relative group">
+                                                            {/* Dot with number */}
+                                                            <div className="absolute -left-[37px] top-1/2 -translate-y-1/2 w-4 h-[1px] bg-gold-film/30" />
+                                                            <div className="absolute -left-[45px] top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-gold-film/50 bg-void shadow-[0_0_10px_rgba(201,162,39,0.2)] flex items-center justify-center">
+                                                                <span className="font-mono-technical text-[6px] text-gold-film/70 font-bold">{footprintNumber}</span>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-5">
+                                                                <div className="w-20 h-20 sm:w-28 sm:h-28 flex-shrink-0 bg-darkroom rounded-sm overflow-hidden border border-white/5 relative group-hover:border-gold-film/30 transition-colors">
+                                                                    {m.media_url ? (
+                                                                        <CinematicImage
+                                                                            src={m.media_url}
+                                                                            alt={m.caption || ''}
+                                                                            fill
+                                                                            unoptimized={true}
+                                                                            className="object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all duration-700"
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center">
+                                                                            <Film size={20} className="text-white/5" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 space-y-1.5 min-w-0">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="font-mono-technical text-[8px] text-gold-film/40 tracking-widest">#{String(footprintNumber).padStart(2, '0')}</span>
+                                                                            <span className="font-mono-technical text-[9px] text-gold-film/60 tracking-widest">{formatDateWithDay(m.created_at)}</span>
+                                                                        </div>
+
+                                                                        {/* Actions Menu */}
+                                                                        {isOwner && (
+                                                                            <div className="relative">
+                                                                                <button
+                                                                                    onClick={() => setFootprintMenuId(footprintMenuId === m.id ? null : m.id)}
+                                                                                    className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                                                                                >
+                                                                                    <MoreHorizontal size={16} />
+                                                                                </button>
+                                                                                {footprintMenuId === m.id && (
+                                                                                    <>
+                                                                                        <div
+                                                                                            className="fixed inset-0 z-40 cursor-default"
+                                                                                            onClick={() => setFootprintMenuId(null)}
+                                                                                        />
+                                                                                        <div className="absolute right-0 top-full mt-1 w-36 bg-black/90 backdrop-blur-md border border-white/10 rounded-sm z-50 shadow-huge overflow-hidden">
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation()
+                                                                                                    setEditingFootprintId(m.id)
+                                                                                                    setEditingCaption(m.caption || '')
+                                                                                                    setFootprintMenuId(null)
+                                                                                                }}
+                                                                                                className="w-full px-3 py-2.5 text-left text-[10px] text-smoke hover:bg-white/10 flex items-center gap-2 border-b border-white/5 transition-colors"
+                                                                                            >
+                                                                                                <Pencil size={10} className="text-gold-film/70" />
+                                                                                                <span>내용 수정</span>
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation()
+                                                                                                    handleImageUpdateClick(m.id)
+                                                                                                    setFootprintMenuId(null)
+                                                                                                }}
+                                                                                                className="w-full px-3 py-2.5 text-left text-[10px] text-smoke hover:bg-white/10 flex items-center gap-2 border-b border-white/5 transition-colors"
+                                                                                            >
+                                                                                                <ImageIcon size={10} className="text-gold-film/70" />
+                                                                                                <span>사진 변경</span>
+                                                                                            </button>
+                                                                                            {m.media_url && (
+                                                                                                <button
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation()
+                                                                                                        handleSetThumbnail(m.media_url)
+                                                                                                    }}
+                                                                                                    className="w-full px-3 py-2.5 text-left text-[10px] text-smoke hover:bg-white/10 flex items-center gap-2 border-b border-white/5 transition-colors"
+                                                                                                >
+                                                                                                    <Star size={10} className="text-gold-film/70" />
+                                                                                                    <span>대표 이미지 설정</span>
+                                                                                                </button>
+                                                                                            )}
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation()
+                                                                                                    handleFootprintDelete(m.id)
+                                                                                                }}
+                                                                                                className="w-full px-3 py-2.5 text-left text-[10px] text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors"
+                                                                                            >
+                                                                                                <Trash2 size={10} />
+                                                                                                <span>기록 삭제</span>
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Caption or Edit Input */}
+                                                                    {editingFootprintId === m.id ? (
+                                                                        <div className="flex items-center gap-2 mt-2">
+                                                                            <input
+                                                                                type="text"
+                                                                                value={editingCaption}
+                                                                                onChange={(e) => setEditingCaption(e.target.value)}
+                                                                                className="flex-1 bg-white/5 border border-white/10 rounded-sm px-2 py-1.5 text-xs text-smoke focus:outline-none focus:border-gold-film/50 transition-colors"
+                                                                                autoFocus
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter') handleFootprintEdit(m.id)
+                                                                                    if (e.key === 'Escape') setEditingFootprintId(null)
+                                                                                }}
+                                                                            />
+                                                                            <button onClick={() => handleFootprintEdit(m.id)} className="p-1.5 bg-gold-film/20 text-gold-film rounded-sm hover:bg-gold-film/30 transition-colors">
+                                                                                <Check size={12} />
+                                                                            </button>
+                                                                            <button onClick={() => setEditingFootprintId(null)} className="p-1.5 text-smoke/50 hover:text-white transition-colors">
+                                                                                <X size={12} />
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <p className="text-smoke text-sm font-light leading-relaxed line-clamp-2 break-keep">
+                                                                            {m.caption || '기록 없이 완료된 루틴입니다.'}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="py-24 text-center">
+                                                <p className="text-smoke/30 font-mono-technical text-xs uppercase tracking-widest">아직 발자취가 없습니다</p>
+                                                <p className="text-smoke/20 font-mono-technical text-[9px] mt-2">체크 버튼을 눌러 첫 번째 기록을 남겨보세요</p>
                                             </div>
                                         )}
                                     </motion.div>
@@ -839,6 +1331,22 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                     )}
                 </AnimatePresence>
             </motion.div>
+
+
+
+            <RemakeModal
+                isOpen={isRemakeModalOpen}
+                onClose={() => setIsRemakeModalOpen(false)}
+                onConfirm={confirmRemake}
+                bucketTitle={bucket.title}
+                isPending={isPending}
+            />
+
+            <CastingModal
+                isOpen={isCastingModalOpen}
+                onClose={() => setIsCastingModalOpen(false)}
+                bucketId={bucket.id}
+            />
         </div >
     )
 }
