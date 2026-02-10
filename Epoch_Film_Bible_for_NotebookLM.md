@@ -1,95 +1,104 @@
-# EPOCH FILM: Project Bible & Source of Truth
-> This document is a consolidated reference for AI analysis (NotebookLM). It contains the project's philosophy, architecture, logic, design direction, and future plans.
+# EPOCH FILM: Project Bible & Source of Truth (Version 2.0)
+> This document is the definitive consolidated reference for AI analysis (NotebookLM). It defines the project's philosophy, architecture, business logic, design direction, and the living development roadmap.
 
 ---
 
-## 1. Project Overview & Philosophy (The Vision)
+## 1. Project Philosophy & Vision (The "Cinematic" Core)
 
 **Project Name:** EPOCH FILM (에포크 필름)
 **Slogan:** "Capture your epoch, Develop your dream."
 
-### Core Values
-- **Romanticism (낭만)**: Treating life events as cinematic scenes.
-- **Achievement (성취)**: Visualizing progress towards dreams.
-- **Archive (기록)**: Preserving memories with metadata (location, time) like a film roll.
+### 1.1 Core Values
+- **Romanticism (낭만)**: Treating mundane life goals as significant "Cinematic Scenes." Every achievement is a shot in a lifetime movie.
+- **Archiving (기록)**: Preserving memories with cinematic metadata (Date, Location, Technique) rather than just flat data.
+- **Connection (연결)**: Interaction between users is defined as "Collaboration between Directors" or "Audience appreciation."
 
-### Brand Concept
-- **Film Context**: A bucket list item is a 'Frame'. A year is a 'Sequence'. Life is an 'Epoch'.
-- **Visual Mood**: Darkroom aesthetic, film grain, neo-cinematic warm tones, gold/amber highlights.
-
----
-
-## 2. Architecture Blueprint (The System)
-
-**Tech Stack:**
-- **Framework**: Next.js 14+ (App Router)
-- **Database**: Supabase (PostgreSQL, Auth, Storage)
-- **Styling**: Tailwind CSS (Cinematic Dark Mode)
-- **AI**: Google Gemini / Groq for Roadmap Generation
-
-### Core Workflow
-1.  **Drafting**: User creates a "Bucket" (Script).
-2.  **Shooting**: User adds "Memories" (Frames) with photos/videos.
-    - *Technical*: Images are processed (HEIC -> WebP), EXIF data extracted (Location/Time), and stored in Supabase.
-3.  **Screening**: Users view each other's buckets and interact via "Tickets" (Likes) and "Comments".
-4.  **Premiere**: Completed buckets become part of the "Hall of Fame".
+### 1.2 The Cinematic Metaphors
+- **Bucket List Item** = **Script / Production**: A planned project.
+- **Individual Memory** = **Frame / Scene**: A captured moment within a production.
+- **Yearly Goals** = **Sequences**: A series of related scenes.
+- **Lifetime** = **Epoch**: The grand collection of all sequences.
+- **Followers** = **Audience/Fans**: People watching your filmography.
 
 ---
 
-## 3. Core Business Logic (The Rules)
+## 2. Architecture & Technical Stack
 
-### Data Models
-- **Profile**: User stats (XP, Level, Streak).
-- **Bucket**: The main goal unit. Has statuses: `DRAFT`, `ACTIVE`, `ACHIEVED`.
-- **Memory**: Individual updates within a bucket. Contains media URL and metadata.
-- **Quest**: Gamification elements (Daily/Weekly tasks).
+**Framework:** Next.js 14+ (App Router)
+**Database & Auth:** Supabase (PostgreSQL, Auth, Storage)
+**Styling:** Tailwind CSS + Framer Motion (Cinematic Animations)
+**AI Engine:** Multi-provider (Primary: Groq Llama-3, Backup: Gemini-2.0 Flash)
 
-### Gamification (The Economy)
-- **Tickets (Interaction Currency)**:
-    - Users get 5 daily tickets.
-    - Issuing a ticket to someone else: Issuer gets +5 XP, Receiver gets +20 XP.
-- **Experience (XP)**:
-    - Gained by adding memories, completing buckets, and social interaction.
-    - Level = `Math.floor(totalXp / 500) + 1`.
-
-### AI Director
-- Generates a step-by-step roadmap for any bucket list item.
-- Suggests local activities, travel tips, and preparatory steps.
+### 2.1 Technical Pillars
+- **Cinematic Image Pipeline**: Automatic conversion (HEIC/HEIF -> WebP), resizing, and EXIF metadata extraction (GPS/Time).
+- **Server Action Architecture**: 100% of business logic resides in `src/app/archive/actions.ts` for unified state management and revalidation.
+- **Smart Revalidation**: Using Next.js `revalidatePath` to ensure instant consistency across Feed, Archive, and Profile.
 
 ---
 
-## 4. Design Direction: "Neo-Cinematic" (The Look)
+## 3. Business Logic & Systems (The Rules)
 
-**Critique of Old Design**: Generic dark mode, cold colors (#000000), lack of texture.
-**New Direction**:
-- **Warmth**: Use of warm blacks (#0D0B0A), deep browns, and gold (#C9A227).
-- **Texture**: Film grain overlays, light leaks, vignette.
-- **Typography**: Playfair Display (Headlines) + DM Sans (Body) + JetBrains Mono (Data).
-- **Metaphor**: UI elements resembling film strips, sprockets, and projector lenses.
+### 3.1 Director Network (Social)
+- **Following**: Users "Subscribe" to other directors' filmographies.
+- **Mutuals**: Directors who follow each other are "Mutual Collaborators."
+- **Casting (Invites)**: Owners can invite other directors to join their production (Casting Call).
 
----
+### 3.2 Interaction Economy (Tickets & Comments)
+- **Tickets**: Appreciative currency (like 'Likes'). Issuing a ticket rewards both the issuer (+5 XP) and the receiver (+20 XP).
+- **Comments**: Scene-specific feedback. Rewards both parties with XP.
+- **Notifications**: Real-time updates for new followers, tickets, comments, and casting calls.
 
-## 5. Future Enhancements (The Roadmap)
+### 3.3 Production Routines
+- **Recurring Buckets**: Projects can be set as DAILY, WEEKLY, or MONTHLY.
+- **Production Schedule**: For weekly routines, directors specify the exact production days (e.g., Mon, Wed, Fri).
 
-### Short-term
-- **Social**: Comments system, Deep links for sharing.
-- **UI**: Infinite scroll, Optimistic UI updates.
-
-### Long-term
-- **Video Memories**: Short-form video support (Reels).
-- **Collaboration**: "Join Project" (Multi-user buckets).
-- **Mobile Native**: Potential React Native / Capacitor migration.
-- **Season System**: Monthly/Yearly "Awards" (Hall of Fame).
+### 3.4 Gamification (The Director's Level)
+- **XP (Experience Points)**: Gained via creating buckets, adding memories, interacting, and completing quests.
+- **Level Formula**: `Math.floor(totalXp / 500) + 1`. Next Level targets multiples of 500 XP.
+- **Quests**: Daily, Weekly, Monthly, and Special missions that guide users to be better "Directors."
 
 ---
 
-## 6. Current Implementation Status (Checklist)
+## 4. Design Language: "Neo-Cinematic"
 
-- [x] **Project Structure**: Next.js App Router, Supabase setup.
-- [x] **Database**: Schemas for Users, Buckets, Memories, Tickets.
-- [x] **Auth**: Supabase Auth (Google/Kakao).
-- [x] **Core Features**: Create Bucket, Add Memory (Image Upload), Toggle Pin.
-- [x] **Image Pipeline**: HEIC support, Resizing, Metadata extraction.
-- [x] **UI Foundation**: StarField background, Cinematic Timeline.
-- [ ] **AI Roadmap**: Backend connected, frontend integration pending.
-- [ ] **Comments**: Schema exists, UI pending.
+### 4.1 Visual Mood
+- **Base**: `Void` (#0A0908) & `Darkroom` (#141210).
+- **Accents**: `Gold Film` (#C9A227), `Cyan Film` (#4ECDC4).
+- **Texture**: Dynamic grain overlays, star-field backgrounds, light-leak gradients.
+- **Typography**: Display fonts for titles (cinematic feel), Monospaced fonts for technical data (technical mono).
+
+### 4.2 Key Interactions
+- **Focus Pulling**: Subtle blur-to-clear transitions during navigation.
+- **Flash Bulb**: Bright white flash animation on successful captures.
+- **Sprocket View**: Progress bars and cards resembling 35mm film strips.
+
+---
+
+## 5. Consolidated Changes & Evolutions (V1 -> V2)
+
+| Feature | Change Description |
+| :--- | :--- |
+| **Navigation** | Shifted from hardcoded links to **Context-aware routing** (`router.back()`) to preserve user exploration state. |
+| **Routines** | Added support for **recurring production cycles** (Daily/Weekly/Monthly) with specific day scheduling. |
+| **Social** | Transitioned from a simple feed to a **Director Network** with Follow/Follower and Mutual support. |
+| **Collaboration** | Implemented **Casting Calls (invites)** to allow multiple users to collaborate on a single bucket. |
+| **Gamification** | Rebuilt the **Quest System** with schema-validated daily/weekly/special types. |
+| **Production Scraps** | Implemented secure **Film Scrapping (Deletion)** with ownership verification and lineage badges for remakes. |
+| **AI Roadmap** | Multi-provider integration (Groq/Gemini) for high-speed planning and fallback. |
+
+---
+
+## 6. Living Roadmap
+
+### 6.1 Short-term (The Shooting Phase)
+- [ ] **Collaborative Editing**: Full multi-user memory additions for casted members.
+- [ ] **Activity Feed (Timeline)**: A unified global timeline of all followed directors' actions.
+- [ ] **Enhanced Roadmap**: AI-generated cost calculation and local place recommendations.
+
+### 6.2 Long-term (The Premiere)
+- [ ] **Season Awards**: Monthly "Film Festivals" (Hall of Fame winners).
+- [ ] **Premium Reels**: Support for short-form cinematic video memories.
+- [ ] **Director Portfolios**: Public profile URLs for sharing filmographies externally.
+
+---
+*Created by Antigravity (Advanced Agentic AI) for the High Imperial Chancellor.*

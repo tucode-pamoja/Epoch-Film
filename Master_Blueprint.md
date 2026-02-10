@@ -9,39 +9,23 @@ EPOCH Film은 **"인생을 영화처럼 기록한다"**는 철학을 바탕으�
 --------------------------------------------------------------------------------
 2. 작업 로드맵 (Task Roadmap)
 파일 구조와 핵심 로직 분석 결과에 따른 현황 및 향후 과제입니다.
-✅ Phase 1: 기반 구축 (Implemented)
-• [x] 프로젝트 구조: Next.js App Router 디렉토리 및 설정 파일 구성 (next.config.ts, tsconfig.json).
-• [x] 데이터베이스 스키마: User Profile, Bucket, Memory 테이블 및 RLS 정책 1차 수립 (SCHEMA.sql, migrations/).
-• [x] 핵심 서버 액션: 버킷 생성(createBucket), 추억 저장(saveMemory - 기본형), 핀 고정(togglePin).
-• [x] 기본 UI 컴포넌트: 버킷 리스트, 타임라인, 별이 쏟아지는 배경(StarField), 하단 네비게이션(BottomNav).
-• [x] 인증 미들웨어: 세션 관리 및 보호된 라우트 설정.
-🚧 Phase 2: 고도화 및 기능 완성 (To-Do Checklist)
-안티그래비티 에이전트들이 즉시 투입되어야 할 영역입니다.
-• [Backend Wizard] AI 로드맵 생성 로직 실구현 (현재 generateRoadmap 내 API 호출부 비어있음).
-• [x] [Backend Wizard] 이미지 최적화 파이프라인 완성 (HEIC 지원, Sharp 최적화, 메타데이터 연동 및 에러 처리 강화).
-• [x] [Frontend Master] StarField 컴포넌트 리팩토링 (React Hook 규칙 준수 및 성능 최적화).
-• [Frontend Master] Implement Cinematic Drafting Experience (Screenplay Input, Focus Pulling, Slate Clap Animation).
-• [Frontend Master] bucket-actions.ts와 연동되는 클라이언트 상호작용(Optimistic Update) 고도화.
-• [Visual Master] CinematicTimeline.tsx의 스크롤 인터랙션 및 애니메이션 세부 조정.
-• [Technical Inspector] create-test-user.ts를 활용한 E2E 테스트 시나리오 작성.
-• [x] [Grand Chancellor] comments 및 tickets 시스템의 비즈니스 로직(포인트 차감 등) 확정 및 하달.
-    - **Tickets**: 일일 5개 지급 (소멸성), 응원 시 발권자 +5XP / 수령자 +20XP.
-    - **Comments**: 작성자 +10XP (일일 5회 제한), 수령자 +2XP.
-    - **AI Roadmap**: 현재 무료이나 향후 티켓 소비형 전환 검토.
 
-🎬 Phase 3: 시네마틱 소셜 (Social & Community)
-사용자 간의 상호작용을 '감독 간의 협업'으로 정의합니다.
-• [x] [Grand Chancellor] **Director Network (Follow)** 시스템 설계: `follows` 테이블 구축 및 RLS 설정.
-• [x] [Frontend Master] **Premiere Feed (Following Tab)**: Explore 페이지 내 팔로우한 감독들의 제작 중/완료된 에포크 필터링 구현.
-• [x] [Visual Master] **Follow Interaction**: "Subscribe to Filmography" 컨셉의 구독 버튼 디자인 및 애니메이션.
-• [Backend Wizard] 팔로우 기반 피드 쿼리 최적화 및 활동 알림(Activity Log) 시스템 연동.
+✅ Phase 1: 기반 및 핵심 기능 구축 (Completed)
+• [x] 프로젝트 구조 및 DB 스키마 수립 (Users, Buckets, Memories, Follows, Tickets).
+• [x] 시네마틱 이미지 파이프라인 (HEIC 지원, Sharp 최적화, EXIF 메타데이터 연동).
+• [x] AI 로드맵 엔진 (Groq/Gemini 멀티 프로바이더 연동).
+• [x] 시네마틱 타임라인 및 인터랙티브 UI (StarField, BottomNav, HUD).
+• [x] 감독 네트워크 (Follow/Following) 및 알림(Notification) 시스템.
+• [x] 제작 루틴(Routines) 시스템 및 요일별 상영 일정 관리.
+• [x] 게이미피케이션 엔진 (Quest System, XP/Level, Tickets).
+• [x] 리메이크(Remake) 및 캐스팅(Casting Call) 시스템.
 
-🎬 Phase 4: 제작 루틴 (Production Routines)
-반복되는 창작 활동을 '정기 상영'으로 정의하여 관리합니다.
-• [Grand Chancellor] **Routine System 설계**: `is_routine`, `frequency`, `routine_days` 필드 추가 및 비즈니스 로직 수립.
-• [Frontend Master] **Cycle Selector**: 일/주/월 단위 및 특정 요일 선택 인터페이스 구현.
-• [Visual Master] **Footprint Timeline**: 루틴별 수행 기록을 타임라인 형태로 요약하는 시각화 도구 설계.
-• [Backend Wizard] 홈 탭 연동 및 루틴 통계 엔진 구현.
+🚧 Phase 2: 고도화 및 사용자 경험 정제 (Current Tasks)
+• [Frontend Master] 상세 페이지 내 시네마틱 드래프팅 경험 고도화 (스크린플레이 입력, 슬레이트 애니메이션).
+• [Backend Wizard] 협업 제작(Casting) 수락 시 공동 편집 권한 로직 정교화.
+• [Visual Master] 타임라인 내 루틴 수행 기록(Footprint) 시각화 도구 설계.
+• [Technical Inspector] 대규모 데이터 로딩 시의 성능 최적화 및 엣지 케이스 테스트.
+
 
 --------------------------------------------------------------------------------
 3. 6인 정예 에이전트 페르소나 및 지침 (The Elite Six)
