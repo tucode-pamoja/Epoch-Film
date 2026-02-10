@@ -20,6 +20,7 @@ EPOCH Film은 **"인생을 영화처럼 기록한다"**는 철학을 바탕으�
 • [Backend Wizard] AI 로드맵 생성 로직 실구현 (현재 generateRoadmap 내 API 호출부 비어있음).
 • [x] [Backend Wizard] 이미지 최적화 파이프라인 완성 (HEIC 지원, Sharp 최적화, 메타데이터 연동 및 에러 처리 강화).
 • [x] [Frontend Master] StarField 컴포넌트 리팩토링 (React Hook 규칙 준수 및 성능 최적화).
+• [Frontend Master] Implement Cinematic Drafting Experience (Screenplay Input, Focus Pulling, Slate Clap Animation).
 • [Frontend Master] bucket-actions.ts와 연동되는 클라이언트 상호작용(Optimistic Update) 고도화.
 • [Visual Master] CinematicTimeline.tsx의 스크롤 인터랙션 및 애니메이션 세부 조정.
 • [Technical Inspector] create-test-user.ts를 활용한 E2E 테스트 시나리오 작성.
@@ -27,6 +28,20 @@ EPOCH Film은 **"인생을 영화처럼 기록한다"**는 철학을 바탕으�
     - **Tickets**: 일일 5개 지급 (소멸성), 응원 시 발권자 +5XP / 수령자 +20XP.
     - **Comments**: 작성자 +10XP (일일 5회 제한), 수령자 +2XP.
     - **AI Roadmap**: 현재 무료이나 향후 티켓 소비형 전환 검토.
+
+🎬 Phase 3: 시네마틱 소셜 (Social & Community)
+사용자 간의 상호작용을 '감독 간의 협업'으로 정의합니다.
+• [x] [Grand Chancellor] **Director Network (Follow)** 시스템 설계: `follows` 테이블 구축 및 RLS 설정.
+• [x] [Frontend Master] **Premiere Feed (Following Tab)**: Explore 페이지 내 팔로우한 감독들의 제작 중/완료된 에포크 필터링 구현.
+• [x] [Visual Master] **Follow Interaction**: "Subscribe to Filmography" 컨셉의 구독 버튼 디자인 및 애니메이션.
+• [Backend Wizard] 팔로우 기반 피드 쿼리 최적화 및 활동 알림(Activity Log) 시스템 연동.
+
+🎬 Phase 4: 제작 루틴 (Production Routines)
+반복되는 창작 활동을 '정기 상영'으로 정의하여 관리합니다.
+• [Grand Chancellor] **Routine System 설계**: `is_routine`, `frequency`, `routine_days` 필드 추가 및 비즈니스 로직 수립.
+• [Frontend Master] **Cycle Selector**: 일/주/월 단위 및 특정 요일 선택 인터페이스 구현.
+• [Visual Master] **Footprint Timeline**: 루틴별 수행 기록을 타임라인 형태로 요약하는 시각화 도구 설계.
+• [Backend Wizard] 홈 탭 연동 및 루틴 통계 엔진 구현.
 
 --------------------------------------------------------------------------------
 3. 6인 정예 에이전트 페르소나 및 지침 (The Elite Six)

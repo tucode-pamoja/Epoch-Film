@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+
+# Debug/utility scripts
+diagnose-db.ts
+get-final-ids.ts
+get-ids.ts
+test_duplicates.ts
+migration_runner.sh
+
+# Work plans (local only)
+work-plan/
