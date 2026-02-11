@@ -11,7 +11,11 @@ export async function getBucket(id: string) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('buckets')
-    .select('*, users(nickname, profile_image_url), original_bucket:buckets!original_bucket_id(id, title, user_id, users(nickname, profile_image_url))')
+    .select(`
+      *, 
+      users!user_id(nickname, profile_image_url), 
+      original_bucket:buckets!original_bucket_id(id, title, user_id, users!user_id(nickname, profile_image_url))
+    `)
     .eq('id', id)
     .single()
 
@@ -142,6 +146,35 @@ export async function saveMemory(bucketId: string, formData: FormData) {
     return { success: false, error: '로그인이 필요합니다.', code: 'UNAUTHORIZED' }
   }
 
+  // Authority Check: Owner or Accepted Cast Member
+  const { data: bucket, error: authError } = await supabase
+    .from('buckets')
+    .select('user_id')
+    .eq('id', bucketId)
+    .single()
+
+  if (authError || !bucket) {
+    return { success: false, error: '시나리오를 찾을 수 없습니다.', code: 'NOT_FOUND' }
+  }
+
+  const isOwner = bucket.user_id === user.id
+  let isAcceptedCast = false
+
+  if (!isOwner) {
+    const { data: castMember } = await supabase
+      .from('bucket_casts')
+      .select('is_accepted')
+      .eq('bucket_id', bucketId)
+      .eq('user_id', user.id)
+      .single()
+
+    isAcceptedCast = !!castMember?.is_accepted
+  }
+
+  if (!isOwner && !isAcceptedCast) {
+    return { success: false, error: '이 시나리오에 기록을 추가할 권한이 없습니다.', code: 'FORBIDDEN' }
+  }
+
   const caption = formData.get('caption') as string
   const imageFile = formData.get('image') as File | null
   const locationLat = formData.get('location_lat') as string
@@ -153,9 +186,9 @@ export async function saveMemory(bucketId: string, formData: FormData) {
 
   // Handle Image Upload if present
   if (imageFile && imageFile.size > 0) {
-    // Check file size (max 20MB for processing)
-    if (imageFile.size > 20 * 1024 * 1024) {
-      return { success: false, error: '파일 용량이 너무 큽니다. (최대 20MB)', code: 'FILE_TOO_LARGE' }
+    // Check file size (max 50MB for processing)
+    if (imageFile.size > 50 * 1024 * 1024) {
+      return { success: false, error: '파일 용량이 너무 큽니다. (최대 50MB)', code: 'FILE_TOO_LARGE' }
     }
 
     const fileExt = imageFile.name.split('.').pop()
@@ -359,8 +392,8 @@ export async function completeBucket(bucketId: string, formData: FormData) {
 
   // Upload image to Supabase Storage if provided
   if (imageFile && imageFile.size > 0) {
-    if (imageFile.size > 20 * 1024 * 1024) {
-      return { success: false, error: '파일 용량이 너무 큽니다.' }
+    if (imageFile.size > 50 * 1024 * 1024) {
+      return { success: false, error: '파일 용량이 너무 큽니다. (최대 50MB)' }
     }
 
     const fileExt = imageFile.name.split('.').pop()
@@ -919,12 +952,57 @@ export async function updateMemoryImage(memoryId: string, bucketId: string, form
     throw new Error('No image provided')
   }
 
-  // Upload new image
-  const fileExt = imageFile.name.split('.').pop()
-  const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-  const { error: uploadError } = await supabase.storage
+  // Check file size (max 50MB)
+  if (imageFile.size > 50 * 1024 * 1024) {
+    throw new Error('File too large (max 50MB)')
+  }
+
+  let buffer = Buffer.from(await imageFile.arrayBuffer())
+  let contentType = imageFile.type
+  const fileExt = imageFile.name.split('.').pop()?.toLowerCase()
+  let fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}`
+
+  // Processing pipeline
+  try {
+    const isHeic = fileExt === 'heic' || fileExt === 'heif' ||
+      contentType === 'image/heic' || contentType === 'image/heif' ||
+      contentType === 'application/octet-stream'
+
+    if (isHeic) {
+      console.log(`[UPDATE_IMAGE] Converting HEIC for memory ${memoryId}`)
+      try {
+        const outputBuffer = await convert({
+          buffer: buffer as any,
+          format: 'JPEG',
+          quality: 1
+        })
+        buffer = Buffer.from(outputBuffer as any)
+      } catch (e) {
+        console.error('[UPDATE_IMAGE] HEIC conversion failed, trying sharp directly')
+      }
+    }
+
+    const sharpLoader = sharp(buffer, { failOn: 'none', page: 0 })
+    sharpLoader.rotate()
+    sharpLoader.resize(1600, null, { withoutEnlargement: true, fit: 'inside' })
+    const processed = await sharpLoader.webp({ quality: 85 }).toBuffer()
+    buffer = processed as any
+    contentType = 'image/webp'
+    fileName = `${fileName}.webp`
+  } catch (err: any) {
+    console.error('[UPDATE_IMAGE] Processing error:', err.message)
+    // Fallback: keep original buffer if it matches extension or is common image type
+    if (!fileName.endsWith('.webp')) {
+      fileName = `${fileName}.${fileExt || 'jpg'}`
+    }
+  }
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
     .from('memories')
-    .upload(fileName, imageFile)
+    .upload(fileName, buffer, {
+      contentType: contentType,
+      upsert: true
+    })
 
   if (uploadError) {
     console.error('Error uploading memory image:', uploadError)
@@ -933,7 +1011,7 @@ export async function updateMemoryImage(memoryId: string, bucketId: string, form
 
   const { data: { publicUrl } } = supabase.storage
     .from('memories')
-    .getPublicUrl(fileName)
+    .getPublicUrl(uploadData.path)
 
   // Update memory record
   const { error: updateError } = await supabase
@@ -1073,7 +1151,10 @@ export async function getUserBuckets(targetUserId?: string) {
 
   let query = supabase
     .from('buckets')
-    .select('id, title, thumbnail_url, status, category, is_public, tickets, is_routine, routine_frequency, routine_days, original_bucket_id')
+    .select(`
+      *,
+      users!user_id(nickname, profile_image_url)
+    `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
@@ -1085,7 +1166,7 @@ export async function getUserBuckets(targetUserId?: string) {
   const { data, error } = await query
 
   if (error) {
-    console.error('Error fetching user buckets:', error)
+    console.error('Error fetching user buckets:', error.message, error.details || '', error.hint || '')
     return []
   }
 
@@ -1114,52 +1195,52 @@ export async function getPublicUserProfile(userId: string) {
 }
 
 export async function getActiveQuests() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    console.log('[getActiveQuests] No user logged in')
-    return []
-  }
-
-  // Ensure user_quests exist for all active quests
-  const { data: allQuests, error: questError } = await supabase
-    .from('quests')
-    .select('*')
-    .eq('is_active', true)
-
-  if (questError) {
-    console.warn('[getActiveQuests] Failed to fetch quests. The "quests" table might be missing or RLS policies are blocking access.', {
-      code: questError.code || 'UNKNOWN',
-      message: questError.message || 'No error message provided',
-      details: questError.details || 'No details'
-    })
-    return []
-  }
-
-  console.log(`[getActiveQuests] Found ${allQuests?.length || 0} active quests`)
-
-  if (!allQuests || allQuests.length === 0) return []
-
-  // Get current user progress
-  const { data: userQuests, error: userQuestError } = await supabase
-    .from('user_quests')
-    .select('*, quests(*)')
-    .eq('user_id', user.id)
-
-  if (userQuestError) {
-    console.error('[getActiveQuests] Error fetching user quests:', userQuestError)
-  }
-
-  // Map progress to quests
-  return allQuests.map(quest => {
-    const userQuest = userQuests?.find(uq => uq.quest_id === quest.id)
-    return {
-      ...quest,
-      progress: userQuest?.progress || 0,
-      is_completed: userQuest?.status === 'COMPLETED' || userQuest?.status === 'CLAIMED',
-      is_claimed: userQuest?.status === 'CLAIMED'
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return []
     }
-  })
+
+    // Ensure user_quests exist for all active quests
+    const { data: allQuests, error: questError } = await supabase
+      .from('quests')
+      .select('*')
+      .eq('is_active', true)
+
+    if (questError) {
+      // Suppress detailed log for expected missing table error
+      console.warn('[getActiveQuests] Quests table access failed (likely missing table or RLS). Returning empty list.')
+      return []
+    }
+
+    if (!allQuests || allQuests.length === 0) return []
+
+    // Get current user progress
+    const { data: userQuests, error: userQuestError } = await supabase
+      .from('user_quests')
+      .select('*, quests(*)')
+      .eq('user_id', user.id)
+
+    if (userQuestError) {
+      console.warn('[getActiveQuests] User quests fetch failed:', userQuestError.message)
+      return []
+    }
+
+    // Map progress to quests
+    return allQuests.map(quest => {
+      const userQuest = userQuests?.find(uq => uq.quest_id === quest.id)
+      return {
+        ...quest,
+        progress: userQuest?.progress || 0,
+        is_completed: userQuest?.status === 'COMPLETED' || userQuest?.status === 'CLAIMED',
+        is_claimed: userQuest?.status === 'CLAIMED'
+      }
+    })
+  } catch (e) {
+    console.error('[getActiveQuests] Unexpected error:', e)
+    return []
+  }
 }
 
 export async function updateQuestProgress(type: string, amount: number = 1) {
@@ -1741,13 +1822,14 @@ export async function getMutualFollowers() {
   return mutuals?.map((m: any) => m.users).filter(Boolean) || []
 }
 
-export async function inviteCast(bucketId: string, targetUserId: string) {
+export async function inviteCast(bucketId: string, targetUserId: string, role: string = 'ACTOR') {
   const supabase = await createClient()
   const { error } = await supabase
     .from('bucket_casts')
     .insert({
       bucket_id: bucketId,
       user_id: targetUserId,
+      role: role,
       status: 'pending'
     })
 
@@ -1765,6 +1847,7 @@ export async function respondToCast(bucketId: string, castId: string, status: 'a
     .update({
       status,
       message,
+      is_accepted: status === 'accepted',
       updated_at: new Date().toISOString()
     })
     .eq('id', castId)

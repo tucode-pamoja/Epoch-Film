@@ -171,10 +171,10 @@ export default async function BucketDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // Fetch memories (Check-in shots)
+  // Fetch memories (Check-in shots) with profile info
   const { data: memories } = await supabase
     .from('memories')
-    .select('*')
+    .select('*, users(nickname, profile_image_url)')
     .eq('bucket_id', id)
     .order('created_at', { ascending: true }) // Ascending for timeline
 

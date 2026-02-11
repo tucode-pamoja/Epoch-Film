@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Sparkles, CheckCircle2, Circle, Loader2, RefreshCw, Film } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { generateRoadmap } from '@/app/archive/actions'
@@ -32,6 +32,30 @@ interface RoadmapViewProps {
   isOwner: boolean
 }
 
+function TypewriterText({ text, speed = 20 }: { text: string; speed?: number }) {
+  const [displayedText, setDisplayedText] = useState('')
+  const [complete, setComplete] = useState(false)
+
+  useEffect(() => {
+    let i = 0
+    const timer = setInterval(() => {
+      setDisplayedText(text.slice(0, i))
+      i++
+      if (i > text.length) {
+        clearInterval(timer)
+        setComplete(true)
+      }
+    }, speed)
+    return () => clearInterval(timer)
+  }, [text, speed])
+
+  return (
+    <span className={complete ? '' : 'after:content-["_"] after:animate-pulse after:bg-white after:inline-block after:w-1 after:h-4 after:ml-0.5'}>
+      {displayedText}
+    </span>
+  )
+}
+
 export function RoadmapView({ bucketId, roadmap, isOwner }: RoadmapViewProps) {
   const [isPending, startTransition] = useTransition()
   const [isGenerating, setIsGenerating] = useState(false) // Keep for local loading state too
@@ -53,13 +77,14 @@ export function RoadmapView({ bucketId, roadmap, isOwner }: RoadmapViewProps) {
   if (!roadmap) {
     if (!isOwner) {
       return (
-        <div className="rounded-3xl border border-white/5 bg-void/30 p-12 text-center backdrop-blur-xl">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white/5 border border-white/10">
-            <Film className="h-10 w-10 text-smoke/20" />
+        <div className="w-full min-h-[400px] flex flex-col items-center justify-center rounded-sm border border-dashed border-white/10 bg-white/[0.02] p-12 text-center backdrop-blur-sm group hover:bg-white/[0.04] transition-colors duration-700">
+          <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-white/5 border border-white/10 group-hover:scale-105 group-hover:border-gold-film/20 transition-all duration-700">
+            <Film className="h-10 w-10 text-smoke/20 group-hover:text-gold-film/40 transition-colors duration-700" strokeWidth={1} />
           </div>
-          <h3 className="mb-3 text-2xl font-display text-white italic tracking-tight">"아직 연출하지 않은 꿈입니다"</h3>
-          <p className="text-smoke/40 font-mono-technical text-[10px] tracking-[0.2em] uppercase">
-            THE SCENARIO FOR THIS PRODUCTION HAS NOT BEEN WRITTEN YET.
+          <h3 className="mb-4 text-2xl md:text-3xl font-display text-smoke/80 font-light italic tracking-tight">"아직 연출하지 않은 꿈입니다"</h3>
+          <div className="h-px w-16 bg-gradient-to-r from-transparent via-white/10 to-transparent mx-auto mb-5" />
+          <p className="text-smoke/30 font-mono-technical text-[10px] tracking-[0.3em] uppercase leading-relaxed w-full whitespace-nowrap">
+            The scenario for this production has not been written yet.
           </p>
         </div>
       )
@@ -140,7 +165,9 @@ export function RoadmapView({ bucketId, roadmap, isOwner }: RoadmapViewProps) {
             <h4 className="mb-1 text-sm font-bold text-white/90">
               Scene {step.step}: {step.title}
             </h4>
-            <p className="text-sm leading-relaxed text-white/50">{step.description}</p>
+            <p className="text-sm leading-relaxed text-white/50">
+              <TypewriterText text={step.description} speed={15} />
+            </p>
           </motion.div>
         ))}
       </div>

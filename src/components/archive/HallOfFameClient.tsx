@@ -15,20 +15,15 @@ interface HallOfFameClientProps {
 
 export function HallOfFameClient({ initialBuckets }: HallOfFameClientProps) {
     const fetchMore = async (page: number) => {
-        return await getHallOfFameBuckets(page + 1, 10)
+        return await getHallOfFameBuckets(page, 10)
     }
 
-    const { items, loading, hasMore, loadMoreRef } = useInfiniteScroll(fetchMore, { pageSize: 10 })
+    const { items, loading, hasMore, loadMoreRef } = useInfiniteScroll(fetchMore, {
+        pageSize: 10,
+        initialItems: initialBuckets
+    })
 
-    // Seed initial items if hook items are empty (initially)
-    // Actually our hook doesn't take initial items. I should modify it or just use it.
-    // For simplicity, let's use the hook's items and treat initialBuckets as the starting point.
-
-    // Actually, the hook I wrote starts with page 0 and calls fetchFn(0).
-    // I should probably pass initial items to the hook.
-
-    // Let's adjust the displayed items to include initial ones.
-    const allItems = items.length > 0 ? [...initialBuckets, ...items] : initialBuckets
+    const allItems = items
 
     if (!allItems || allItems.length === 0) {
         return (

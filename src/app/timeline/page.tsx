@@ -49,21 +49,18 @@ export default function TimelinePage() {
         <div className="fixed inset-0 w-full h-full overflow-hidden bg-void selection:bg-gold-film/30 flex flex-col pt-safe">
             <StarField />
 
-            <div className="relative z-10 flex flex-col h-full w-full max-w-[1400px] mx-auto overflow-hidden">
-                <header className="flex flex-col items-start gap-1 p-6 sm:px-12 sm:pt-12 sm:pb-4 animate-fade-in-up shrink-0">
+            <div className="relative z-10 flex flex-col h-full w-full max-w-[1400px] mx-auto overflow-hidden pb-12">
+                <header className="flex flex-col items-start gap-1 p-4 sm:px-12 sm:pt-6 sm:pb-2 animate-fade-in-up shrink-0">
                     <div className="font-mono-technical text-gold-film/60 tracking-[0.4em] uppercase text-[10px]">Your History</div>
-                    <h1 className="text-4xl sm:text-5xl font-display text-celluloid">
+                    <h1 className="text-2xl sm:text-3xl font-display text-celluloid">
                         Timeline
                     </h1>
                     <p className="text-smoke text-sm">완성된 당신의 필름들을 확인하세요.</p>
                 </header>
 
-                <main className="flex-1 flex flex-col justify-center min-h-0 relative">
+                <main className="flex-1 flex flex-col justify-center min-h-0 relative overflow-hidden">
                     <CinematicTimeline buckets={buckets} />
                 </main>
-
-                {/* Footer space to prevent bottom navigation overlap */}
-                <div className="h-20 shrink-0 pointer-events-none" />
             </div>
         </div>
     )

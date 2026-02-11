@@ -22,11 +22,17 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({
+import { createClient } from "@/utils/supabase/server";
+import RealtimeNotifier from "@/components/layout/RealtimeNotifier";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <html lang="ko">
       <body className="antialiased pb-24">
@@ -43,6 +49,7 @@ export default function RootLayout({
         {children}
         <BottomNav />
         <Toaster position="top-center" richColors theme="dark" />
+        {user && <RealtimeNotifier currentUserId={user.id} />}
       </body>
     </html>
   );

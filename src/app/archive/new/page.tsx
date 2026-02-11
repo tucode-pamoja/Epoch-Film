@@ -21,7 +21,7 @@ function NewBucketForm() {
   const categories = ['TRAVEL', 'GROWTH', 'CAREER', 'Relationship', 'FOOD', 'OTHER']
 
   return (
-    <div className="w-full max-w-[640px] space-y-10">
+    <div className="w-full space-y-10">
       <div className="text-center space-y-2">
         <h1 className="text-4xl font-display text-celluloid">새로운 Scene (New Scene)</h1>
         <p className="text-smoke font-light text-sm">당신의 아카이브에 새로운 꿈을 기록하세요.</p>
@@ -139,7 +139,7 @@ function NewBucketForm() {
           <input type="hidden" name="importance" value="3" />
         </div>
 
-        <div className="pt-6 space-y-4 text-center">
+        <div className="pt-6 space-y-4 text-center pb-4">
           <SubmitButton />
           <button
             type="button"
@@ -175,10 +175,12 @@ function SubmitButton() {
 
 export default function NewBucketPage() {
   return (
-    <div className="w-full min-h-screen flex justify-center items-center p-8 bg-void">
-      <Suspense fallback={<div className="text-gold-film font-mono-technical animate-pulse">LOADING_SCRIPT...</div>}>
-        <NewBucketForm />
-      </Suspense>
+    <div className="fixed inset-0 w-full h-full overflow-y-auto bg-void">
+      <div className="w-full max-w-[640px] mx-auto pt-10 px-6 pb-36">
+        <Suspense fallback={<div className="text-gold-film font-mono-technical animate-pulse text-center">LOADING_SCRIPT...</div>}>
+          <NewBucketForm />
+        </Suspense>
+      </div>
     </div>
   )
 }

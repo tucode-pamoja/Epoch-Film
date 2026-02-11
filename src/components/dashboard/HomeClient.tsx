@@ -3,14 +3,17 @@
 import { Bucket } from '@/types'
 import { SceneCard } from '@/components/buckets/SceneCard'
 import { motion } from 'framer-motion'
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, useOptimistic, useTransition } from 'react'
 import { Plus, Film, Star } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { CompletionModal } from '@/components/archive/CompletionModal'
 import { completeBucket, completeRoutineCycle, saveMemory } from '@/app/archive/actions'
-import { clsx } from 'clsx'
+import { ActionSlate } from '@/components/layout/ActionSlate'
+import clsx from 'clsx'
+// Removed static confetti import
+import { toast } from 'sonner'
 
 export interface HomeClientProps {
     buckets: Bucket[]
@@ -30,47 +33,87 @@ export function HomeClient({ buckets }: HomeClientProps) {
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRODUCTION' | 'ACHIEVED' | 'DAILY' | 'WEEKLY' | 'MONTHLY'>('ALL')
     const [activeIndex, setActiveIndex] = useState(0)
     const [completingBucket, setCompletingBucket] = useState<Bucket | null>(null)
+    const [isSlateOpen, setIsSlateOpen] = useState(false)
     const carouselRef = useRef<HTMLDivElement>(null)
+    const [isPending, startTransition] = useTransition()
+
+    // Optimistic State for Buckets (Status/Routine updates)
+    const [optimisticBuckets, addOptimisticBucket] = useOptimistic(
+        buckets,
+        (state: Bucket[], updatedBucket: Partial<Bucket> & { id: string }) => {
+            return state.map(b => b.id === updatedBucket.id ? { ...b, ...updatedBucket } : b)
+        }
+    )
 
     const handleCompletionSubmit = async (data: { image?: File; caption: string }) => {
         if (!completingBucket) return
 
-        if (completingBucket.is_routine) {
-            // Routine: save memory as footprint + mark cycle complete (not ACHIEVED)
-            const formData = new FormData()
-            formData.append('caption', data.caption || '루틴 완료 🎬')
-            if (data.image) {
-                formData.append('image', data.image)
-            }
-            await saveMemory(completingBucket.id, formData)
-            await completeRoutineCycle(completingBucket.id)
-        } else {
-            // Regular bucket: mark as ACHIEVED
-            const formData = new FormData()
-            formData.append('caption', data.caption)
-            if (data.image) {
-                formData.append('image', data.image)
-            }
-            await completeBucket(completingBucket.id, formData)
-        }
+        const bucketId = completingBucket.id
+        const isRoutine = completingBucket.is_routine
 
+        // Close modal immediately for responsive UX
         setCompletingBucket(null)
+
+        // Wrap in startTransition so useOptimistic updater runs in a valid context
+        startTransition(async () => {
+            // 1. Optimistic Update (now inside transition)
+            addOptimisticBucket({
+                id: bucketId,
+                status: isRoutine ? completingBucket.status : 'ACHIEVED' as any,
+                routine_last_completed_at: isRoutine ? new Date().toISOString() : completingBucket.routine_last_completed_at
+            })
+
+            // 2. Particle Effect (Dream Dust)
+            const confetti = (await import('canvas-confetti')).default
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#C9A227', '#E8D5A3', '#FFFFFF'],
+                ticks: 200,
+                gravity: 1.2,
+                shapes: ['circle'],
+                scalar: 0.75
+            })
+
+            try {
+                if (isRoutine) {
+                    const formData = new FormData()
+                    formData.append('caption', data.caption || '루틴 완료 🎬')
+                    if (data.image) {
+                        formData.append('image', data.image)
+                    }
+                    await saveMemory(bucketId, formData)
+                    await completeRoutineCycle(bucketId)
+                } else {
+                    const formData = new FormData()
+                    formData.append('caption', data.caption)
+                    if (data.image) {
+                        formData.append('image', data.image)
+                    }
+                    await completeBucket(bucketId, formData)
+                }
+            } catch (err) {
+                console.error('Failed to complete:', err)
+                toast.error('변경 사항을 저장하는 중 오류가 발생했습니다.')
+            }
+        })
     }
 
     // Filtered Content
     const displayedBuckets = useMemo(() => {
-        let filtered = buckets
+        let filtered = optimisticBuckets
 
         if (activeMainTab === 'ROUTINES') {
             // "Production Routines": Recurring activities
-            filtered = buckets.filter(b => b.is_routine === true)
+            filtered = optimisticBuckets.filter(b => b.is_routine === true)
 
             if (statusFilter === 'DAILY' || statusFilter === 'WEEKLY' || statusFilter === 'MONTHLY') {
                 filtered = filtered.filter(b => b.routine_frequency === statusFilter)
             }
         } else if (activeMainTab === 'YEAR') {
             // "올해의 Scenes": Non-routine items with a target_date
-            filtered = buckets.filter(b => b.is_routine !== true && b.target_date !== null)
+            filtered = optimisticBuckets.filter(b => b.is_routine !== true && b.target_date !== null)
 
             if (statusFilter === 'PRODUCTION') {
                 filtered = filtered.filter(b => b.status !== 'ACHIEVED')
@@ -79,7 +122,7 @@ export function HomeClient({ buckets }: HomeClientProps) {
             }
         } else if (activeMainTab === 'LIFE') {
             // "My Epoch": Non-routine items with no target_date
-            filtered = buckets.filter(b => b.is_routine !== true && b.target_date === null)
+            filtered = optimisticBuckets.filter(b => b.is_routine !== true && b.target_date === null)
 
             if (statusFilter === 'PRODUCTION') {
                 filtered = filtered.filter(b => b.status !== 'ACHIEVED')
@@ -89,7 +132,7 @@ export function HomeClient({ buckets }: HomeClientProps) {
         }
 
         return filtered
-    }, [buckets, activeMainTab, statusFilter])
+    }, [optimisticBuckets, activeMainTab, statusFilter])
 
     const showAddCard = statusFilter !== 'ACHIEVED'
     const totalCarouselItems = displayedBuckets.length + (showAddCard ? 1 : 0)
@@ -174,7 +217,11 @@ export function HomeClient({ buckets }: HomeClientProps) {
                 </div>
 
                 <div className="mt-8 shrink-0">
-                    <Button href="/archive/new" size="lg" className="rounded-sm px-10 py-5 text-sm">
+                    <Button
+                        onClick={() => setIsSlateOpen(true)}
+                        size="lg"
+                        className="rounded-sm px-10 py-5 text-sm"
+                    >
                         🎬 시나리오 작성하기
                     </Button>
                 </div>
@@ -205,12 +252,12 @@ export function HomeClient({ buckets }: HomeClientProps) {
                             </button>
                         ))}
                     </div>
-                    <Link
-                        href="/archive/new"
+                    <button
+                        onClick={() => setIsSlateOpen(true)}
                         className="w-10 h-10 rounded-full bg-gold-film/10 border border-gold-film/30 flex items-center justify-center text-gold-film hover:bg-gold-film hover:text-velvet transition-all duration-300"
                     >
                         <Plus size={20} />
-                    </Link>
+                    </button>
                 </div>
 
                 <div className="flex items-center justify-center gap-8">
@@ -243,11 +290,11 @@ export function HomeClient({ buckets }: HomeClientProps) {
             <div className="flex-1 min-h-0 relative flex flex-col items-center justify-center overflow-visible">
                 <div
                     ref={carouselRef}
-                    className="w-full flex-1 flex items-center justify-start overflow-visible pb-48"
+                    className="w-full flex-1 flex items-center justify-start overflow-visible pb-16"
                     style={{ paddingLeft: 'calc(50% - 140px)' }}
                 >
                     <motion.div
-                        className="flex gap-10 items-center h-[50vh] min-h-[420px] cursor-grab active:cursor-grabbing"
+                        className="flex gap-10 items-center h-[42vh] min-h-[340px] max-h-[480px] cursor-grab active:cursor-grabbing"
                         animate={{ x: -(activeIndex * totalStep) }}
                         transition={{ type: "spring", stiffness: 120, damping: 20, mass: 1 }}
                         drag="x"
@@ -285,12 +332,14 @@ export function HomeClient({ buckets }: HomeClientProps) {
                                 {showAddCard && (
                                     <div
                                         className="w-[280px] flex-shrink-0 h-full flex items-center justify-center"
-                                        onClick={() => navigateTo(totalRealBuckets)}
+                                        onClick={() => {
+                                            if (isAddCardFocused) setIsSlateOpen(true)
+                                            else navigateTo(totalRealBuckets)
+                                        }}
                                     >
-                                        <Link
-                                            href="/archive/new"
+                                        <div
                                             className={clsx(
-                                                "group aspect-[3/4] w-full flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all duration-700",
+                                                "group aspect-[3/4] w-full flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all duration-700 cursor-pointer",
                                                 isAddCardFocused
                                                     ? "border-gold-film/50 bg-gold-film/5 scale-105 opacity-100 shadow-huge"
                                                     : "border-white/10 bg-white/5 scale-100 opacity-20 blur-[1px]"
@@ -300,7 +349,7 @@ export function HomeClient({ buckets }: HomeClientProps) {
                                                 <Plus size={32} className="text-smoke group-hover:text-gold-film transition-colors" />
                                             </div>
                                             <span className="mt-6 font-display text-[10px] tracking-[0.3em] uppercase text-smoke group-hover:text-gold-film">Add New Scene</span>
-                                        </Link>
+                                        </div>
                                     </div>
                                 )}
                             </>
@@ -309,10 +358,10 @@ export function HomeClient({ buckets }: HomeClientProps) {
                 </div>
             </div>
 
-            {/* 3. SCENE Counter - Fixed for visibility */}
+            {/* 3. SCENE Counter - below carousel, above BottomNav */}
             {totalRealBuckets > 0 && (
-                <div className="fixed bottom-[108px] left-0 right-0 flex flex-col items-center gap-5 z-[100] pointer-events-none">
-                    <div className="flex justify-center gap-3 pointer-events-auto">
+                <div className="flex-shrink-0 flex flex-col items-center gap-2 pb-4 z-[10]">
+                    <div className="flex justify-center gap-3">
                         {[...Array(totalRealBuckets)].map((_, i) => (
                             <button
                                 key={i}
@@ -341,6 +390,12 @@ export function HomeClient({ buckets }: HomeClientProps) {
                 onClose={() => setCompletingBucket(null)}
                 onComplete={handleCompletionSubmit}
                 bucketTitle={completingBucket?.title || ''}
+            />
+
+            <ActionSlate
+                isOpen={isSlateOpen}
+                targetUrl="/archive/new"
+                onComplete={() => setIsSlateOpen(false)}
             />
         </div>
     )

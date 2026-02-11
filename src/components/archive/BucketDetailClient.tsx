@@ -42,6 +42,7 @@ import { CommentSection } from '@/components/archive/comments/CommentSection'
 import { ShareButton } from '@/components/archive/ShareButton'
 import { RemakeModal } from '@/components/archive/RemakeModal'
 import { CastingModal } from '@/components/archive/CastingModal'
+import { FlashBulb } from '@/components/layout/FlashBulb'
 import { saveMemory, updateBucket, updateMemory, deleteMemory, updateMemoryCaption, updateMemoryImage, setBucketThumbnail, issueTicket, remakeBucket, inviteCast, getMutualFollowers, deleteBucket } from '@/app/archive/actions'
 import { toast } from 'sonner'
 
@@ -57,9 +58,16 @@ interface BucketDetailClientProps {
 
 export function BucketDetailClient({ bucket, memories, letters, comments, currentUserId, hasIssuedTicket: initialHasIssuedTicket = false }: BucketDetailClientProps) {
     const isOwner = currentUserId === bucket.user_id
+    const userCast = bucket.bucket_casts?.find((c: any) => c.user_id === currentUserId && (c.is_accepted ?? (c.status === 'accepted')))
+    const isCast = !!userCast
+    // Polyfill role if missing (schema update pending)
+    const currentUserRole = userCast?.role || (isCast ? 'ACTOR' : undefined)
+    const canContribute = isOwner || (userCast && (currentUserRole === 'CO_DIRECTOR' || currentUserRole === 'ACTOR'))
+
     const [activeTab, setActiveTab] = useState<'RECORD' | 'FOOTPRINTS' | 'ROADMAP' | 'COMMENTS'>(bucket.is_routine ? 'FOOTPRINTS' : 'RECORD')
     const [isAddRecordOpen, setIsAddRecordOpen] = useState(false)
     const [isMoreHorizontalOpen, setIsMoreHorizontalOpen] = useState(false)
+    const [flashTrigger, setFlashTrigger] = useState(false)
     const [isEditOpen, setIsEditOpen] = useState(false)
     const [isEditRecordOpen, setIsEditRecordOpen] = useState(false)
     const [editingRecord, setEditingRecord] = useState<any>(null)
@@ -73,6 +81,12 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
             hasIssued: newHasIssued,
             count: newHasIssued ? state.count + 1 : state.count - 1
         })
+    )
+
+    // Optimistic State for Memories
+    const [optimisticMemories, addOptimisticMemory] = useOptimistic(
+        memories,
+        (state, newMemory: any) => [newMemory, ...state]
     )
 
     // Edit states
@@ -179,7 +193,6 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
     }
 
     const handleDeleteRecord = async (recordId: string) => {
-        if (!confirm('정말로 이 기록을 삭제하시겠습니까?')) return
         startTransition(async () => {
             try {
                 await deleteMemory(recordId, bucket.id)
@@ -413,9 +426,20 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                 formData.append('captured_at', data.captured_at)
             }
 
+            const optimisticId = 'temp-' + Date.now()
+            addOptimisticMemory({
+                id: optimisticId,
+                type: 'MEMORY',
+                media_url: data.image ? URL.createObjectURL(data.image) : null,
+                caption: data.caption,
+                created_at: new Date().toISOString(),
+                isOptimistic: true
+            })
+
             try {
                 const result = await saveMemory(bucket.id, formData)
                 if (result.success) {
+                    setFlashTrigger(true)
                     setIsAddRecordOpen(false)
                     toast.success('Frame added to production')
                     router.refresh()
@@ -430,7 +454,7 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
 
     // Timeline merge (Memories + Letters)
     const timelineItems = [
-        ...memories.map(m => ({ ...m, type: 'MEMORY' })),
+        ...optimisticMemories.map(m => ({ ...m, type: 'MEMORY' })),
         ...letters.map(l => ({ ...l, type: 'LETTER' }))
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
@@ -783,13 +807,15 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                             <div>
                                                 <h4 className="text-[10px] sm:text-xs font-mono-technical text-smoke/40 tracking-[0.3em] uppercase underline decoration-gold-film/30 underline-offset-8">Production_Log</h4>
                                             </div>
-                                            <Button
-                                                onClick={() => setIsAddRecordOpen(true)}
-                                                className="h-8 sm:h-10 bg-gold-film/10 hover:bg-gold-film/20 text-gold-film border border-gold-film/30 gap-1 sm:gap-2 px-3 sm:px-4"
-                                            >
-                                                <Camera size={14} className="sm:w-4 sm:h-4" />
-                                                <span className="text-[10px] sm:text-sm">ADD FRAME</span>
-                                            </Button>
+                                            {canContribute && (
+                                                <Button
+                                                    onClick={() => setIsAddRecordOpen(true)}
+                                                    className="h-8 sm:h-10 bg-gold-film/10 hover:bg-gold-film/20 text-gold-film border border-gold-film/30 gap-1 sm:gap-2 px-3 sm:px-4"
+                                                >
+                                                    <Camera size={14} className="sm:w-4 sm:h-4" />
+                                                    <span className="text-[10px] sm:text-sm">ADD FRAME</span>
+                                                </Button>
+                                            )}
                                         </div>
                                         {timelineItems.length > 0 ? (
                                             <div className="space-y-16 relative">
@@ -810,8 +836,18 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                                                                 fill
                                                                                 unoptimized={true}
                                                                                 containerClassName="h-full"
-                                                                                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                                                                className={`object-cover transition-transform duration-700 group-hover:scale-105 ${item.isOptimistic ? 'animate-pulse blur-md grayscale' : ''}`}
                                                                             />
+
+                                                                            {item.isOptimistic && (
+                                                                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-10">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <Loader2 className="w-5 h-5 text-gold-film animate-spin" />
+                                                                                        <span className="font-mono-technical text-xs text-gold-film tracking-[0.3em] uppercase animate-pulse">Developing...</span>
+                                                                                    </div>
+                                                                                    <span className="text-[10px] font-mono-technical text-gold-film/40 tracking-widest uppercase mt-2">화학적 현상 공정 중</span>
+                                                                                </div>
+                                                                            )}
 
                                                                             {/* Hover Actions for Records */}
                                                                             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
@@ -857,6 +893,31 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                                                                     <Trash2 size={14} />
                                                                                 </button>
                                                                             </div>
+                                                                            {/* Contributor Badge */}
+                                                                            <div className="absolute bottom-2 left-2 flex items-center gap-2 bg-void/60 backdrop-blur-sm px-2 py-1 rounded-sm border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                <div className="w-4 h-4 rounded-full overflow-hidden border border-gold-film/30 relative">
+                                                                                    {item.users?.profile_image_url ? (
+                                                                                        <Image src={item.users.profile_image_url} alt={item.users.nickname || ''} fill className="object-cover" />
+                                                                                    ) : (
+                                                                                        <div className="w-full h-full bg-gold-film/10 flex items-center justify-center">
+                                                                                            <User size={8} className="text-gold-film" />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className="text-[8px] font-mono-technical text-smoke/80 tracking-widest uppercase">
+                                                                                    Captured by @{item.users?.nickname || 'Unknown'}
+                                                                                    {item.user_id === bucket.user_id && (
+                                                                                        <span className="ml-2 px-1 py-0.5 rounded-[2px] bg-gold-film/10 border border-gold-film/30 text-[7px] text-gold-film font-mono-technical">
+                                                                                            DIRECTOR
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {item.user_id !== bucket.user_id && bucket.bucket_casts?.some((c: any) => c.user_id === item.user_id && c.is_accepted) && (
+                                                                                        <span className="ml-2 px-1 py-0.5 rounded-[2px] bg-blue-500/10 border border-blue-500/30 text-[7px] text-blue-400 font-mono-technical">
+                                                                                            {bucket.bucket_casts?.find((c: any) => c.user_id === item.user_id)?.role || 'CONTRIBUTOR'}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 ) : (
@@ -897,12 +958,14 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                                                     <p className="text-smoke italic font-light">아직 이 장면에 기록된 프레임이 없습니다.</p>
                                                     <p className="text-[10px] font-mono-technical text-smoke/30 uppercase tracking-widest mt-2">No sequences captured in the production log yet.</p>
                                                 </div>
-                                                <Button
-                                                    onClick={() => setIsAddRecordOpen(true)}
-                                                    className="bg-gold-film text-void hover:bg-gold-warm px-8 font-bold"
-                                                >
-                                                    ADD FIRST FRAME
-                                                </Button>
+                                                {canContribute && (
+                                                    <Button
+                                                        onClick={() => setIsAddRecordOpen(true)}
+                                                        className="bg-gold-film text-void hover:bg-gold-warm px-8 font-bold"
+                                                    >
+                                                        ADD FIRST FRAME
+                                                    </Button>
+                                                )}
                                             </div>
                                         )}
                                     </motion.div>
@@ -1346,6 +1409,11 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
                 isOpen={isCastingModalOpen}
                 onClose={() => setIsCastingModalOpen(false)}
                 bucketId={bucket.id}
+            />
+
+            <FlashBulb
+                trigger={flashTrigger}
+                onComplete={() => setFlashTrigger(false)}
             />
         </div >
     )

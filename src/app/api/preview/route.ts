@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         console.warn('heic-convert failed, trying sharp:', heicError)
         // Fallback to sharp
         try {
-          const processed = await sharp(buffer).jpeg({ quality: 80 }).toBuffer()
+          const processed = await sharp(buffer, { failOn: 'none', page: 0 }).jpeg({ quality: 80 }).toBuffer()
           buffer = Buffer.from(processed)
         } catch (sharpError) {
           console.error('Both HEIC conversion methods failed:', sharpError)
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resize for preview (max 800px width, maintain aspect ratio)
-    const previewResult = await sharp(buffer)
+    const previewResult = await sharp(buffer, { failOn: 'none', page: 0 })
       .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 75 })
       .toBuffer()

@@ -1,8 +1,8 @@
 'use client'
 
 import { Bucket } from '@/types'
-import { clsx } from 'clsx'
-import { Star, CheckCircle2, Ticket, Share2, Loader2, RotateCcw, Copy } from 'lucide-react'
+import clsx from 'clsx'
+import { Star, CheckCircle2, Ticket, Share2, Loader2, RotateCcw, Copy, User } from 'lucide-react'
 import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -296,9 +296,11 @@ export function SceneCard({
                 )}>
                   {isAchieved ? 'VERIFIED' : 'IN PRODUCTION'}
                 </span>
-                <span className="font-mono-technical text-[7px] tracking-[0.2em] px-1.5 py-0.5 rounded-sm border border-white/10 bg-white/5 text-white/40 uppercase backdrop-blur-md">
-                  {bucket.target_date ? 'YEARLY' : 'MY EPOCH'}
-                </span>
+                {bucket.bucket_casts?.filter((c: any) => c.is_accepted || c.status === 'accepted').map((cast: any) => (
+                  <span key={cast.id} className="font-mono-technical text-[7px] tracking-[0.1em] px-1.5 py-0.5 rounded-sm border border-blue-500/30 bg-blue-500/10 text-blue-400 uppercase backdrop-blur-md">
+                    [{cast.role || 'ACTOR'}]
+                  </span>
+                ))}
               </>
             )}
             {bucket.original_bucket_id && (
@@ -366,7 +368,10 @@ export function SceneCard({
           <p className="font-mono-technical text-[7px] text-white/50 tracking-[0.3em] uppercase opacity-0 group-hover/card:opacity-100 transition-opacity duration-500">
             {bucket.category || 'CINEMA'}
           </p>
-          <h3 className="text-xl md:text-2xl font-display leading-[1.1] text-white tracking-[-0.03em] drop-shadow-[0_5px_15px_rgba(0,0,0,1)] uppercase break-keep line-clamp-2">
+          <h3 className={clsx(
+            "text-xl md:text-2xl font-display leading-[1.1] text-white tracking-[-0.03em] drop-shadow-[0_5px_15px_rgba(0,0,0,1)] uppercase break-keep line-clamp-2 transition-all duration-700",
+            routineCompletedToday && "line-through decoration-gold-film/50 opacity-60"
+          )}>
             {bucket.title}
           </h3>
         </div>
@@ -394,6 +399,20 @@ export function SceneCard({
             <Copy size={10} className="text-smoke/40 group-hover/remake:text-gold-film transition-colors" />
             <span className="font-mono-technical text-[7px] text-smoke/40 group-hover/remake:text-gold-film tracking-widest uppercase">
               {bucket.original_bucket_id ? 'REMAKED' : (bucket.remake_count || 0)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 group/attribution">
+            <div className="w-3.5 h-3.5 rounded-full overflow-hidden border border-gold-film/30 relative shrink-0">
+              {bucket.users?.profile_image_url ? (
+                <img src={bucket.users.profile_image_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gold-film/10 flex items-center justify-center">
+                  <User size={8} className="text-gold-film/40" />
+                </div>
+              )}
+            </div>
+            <span className="font-mono-technical text-[7px] text-smoke/40 group-hover/attribution:text-gold-film tracking-widest uppercase truncate max-w-[60px]">
+              @{bucket.users?.nickname || 'Unknown'}
             </span>
           </div>
           <div className="w-px h-2.5 bg-white/10" />

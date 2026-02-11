@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Camera, Send, Upload, Film, Trash2 } from 'lucide-react'
+import { X, Camera, Send, Upload, Film, Trash2, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import { extractImageMetadata, ImageMetadata } from '@/utils/media'
@@ -276,7 +276,7 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
                                                 </div>
                                                 <div className="text-center">
                                                     <p className="text-smoke/60 font-display text-sm">프레임 업로드</p>
-                                                    <p className="text-[9px] font-mono-technical text-smoke/30 uppercase tracking-tighter mt-1">JPG, PNG, HEIC 지원 (최대 10MB)</p>
+                                                    <p className="text-[9px] font-mono-technical text-smoke/30 uppercase tracking-tighter mt-1">JPG, PNG, HEIC 지원 (최대 50MB)</p>
                                                 </div>
                                             </>
                                         )}
@@ -312,6 +312,24 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
                                     />
                                 </div>
 
+                                {/* Processing Bar */}
+                                {isSubmitting && (
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center text-[9px] font-mono-technical text-gold-film uppercase tracking-widest">
+                                            <span>Processing_Sequence</span>
+                                            <span className="animate-pulse">Capturing Frame...</span>
+                                        </div>
+                                        <div className="h-[2px] w-full bg-white/5 overflow-hidden rounded-full">
+                                            <motion.div
+                                                initial={{ x: '-100%' }}
+                                                animate={{ x: '100%' }}
+                                                transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                                className="h-full w-1/2 bg-gradient-to-r from-transparent via-gold-film to-transparent"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Actions - Reduced Padding */}
                                 <div className="flex items-center justify-end gap-3 pt-2">
                                     <Button
@@ -319,23 +337,24 @@ export function AddRecordModal({ isOpen, onClose, onAdd, bucketTitle }: AddRecor
                                         variant="secondary"
                                         onClick={onClose}
                                         className="border-white/10 hover:bg-white/5 text-xs h-10 px-6"
+                                        disabled={isSubmitting}
                                     >
                                         취소
                                     </Button>
                                     <Button
                                         type="submit"
                                         disabled={isSubmitting || (!caption && !imageFile)}
-                                        className="bg-gold-film text-void hover:bg-gold-warm px-8 font-bold text-xs h-10"
+                                        className="bg-gold-film text-void hover:bg-gold-warm px-8 font-bold text-xs h-10 overflow-hidden relative"
                                     >
                                         {isSubmitting ? (
                                             <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 border-2 border-void/30 border-t-void rounded-full animate-spin" />
-                                                처리 중...
+                                                <Loader2 size={14} className="animate-spin" />
+                                                현상 중...
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-2">
                                                 <Send size={14} />
-                                                기록하기
+                                                장면 기록
                                             </div>
                                         )}
                                     </Button>

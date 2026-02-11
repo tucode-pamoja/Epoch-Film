@@ -40,7 +40,7 @@ export interface Bucket {
   updated_at: string
   original_bucket_id: string | null
   remake_count?: number
-  casts: BucketCast[] | null
+  bucket_casts?: BucketCast[] | null
   users?: Profile // Joined relation
   original_bucket?: {
     id: string
@@ -59,6 +59,8 @@ export interface BucketCast {
   id: string
   bucket_id: string
   user_id: string
+  role: string | null
+  is_accepted: boolean
   status: CastStatus
   message: string | null
   created_at: string
@@ -77,6 +79,10 @@ export interface Memory {
   location_lng: number | null
   captured_at: string | null
   created_at: string
+  users?: {
+    nickname: string | null
+    profile_image_url: string | null
+  }
 }
 
 export interface UserStats {

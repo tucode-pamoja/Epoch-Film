@@ -161,7 +161,7 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
             </div>
 
             <p className="mt-12 text-xs sm:text-sm text-smoke/60 font-light italic tracking-widest w-full break-keep uppercase">
-                "시작하기에 가장 좋은 때는 어제였고, 두 번째로 좋은 때는 지금이다."
+                &quot;시작하기에 가장 좋은 때는 어제였고, 두 번째로 좋은 때는 지금이다.&quot;
             </p>
         </div>
     )
@@ -177,18 +177,23 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
             </div>
 
             {/* Top HUD Controls */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-12 py-6 shrink-0 z-30">
-                <div className="flex items-center gap-2 p-1 bg-void/40 backdrop-blur-md rounded-full border border-white/10">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-12 py-2 shrink-0 z-30 pointer-events-none">
+                {/* Categories Pill */}
+                <div className="pointer-events-auto relative flex items-center gap-2 p-1.5 bg-void/40 backdrop-blur-3xl rounded-full border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+                    <div className="absolute inset-0 rounded-full border border-white/5 pointer-events-none" />
+
                     <div className="px-3 border-r border-white/10">
-                        <Filter size={10} className="text-cyan-film/60" />
+                        <Filter size={12} className="text-cyan-film/60" />
                     </div>
                     {categories.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
                             className={clsx(
-                                "px-3 py-1 rounded-full text-[9px] font-mono-technical transition-all",
-                                selectedCategory === cat ? "bg-cyan-film/20 text-cyan-film" : "text-smoke/40 hover:text-smoke/80"
+                                "px-3 py-1.5 rounded-full text-[9px] font-mono-technical transition-all relative z-10",
+                                selectedCategory === cat
+                                    ? "bg-cyan-film/20 text-cyan-film shadow-[0_0_10px_rgba(78,205,196,0.2)]"
+                                    : "text-smoke/40 hover:text-smoke/80 hover:bg-white/5"
                             )}
                         >
                             {cat}
@@ -196,14 +201,19 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                     ))}
                 </div>
 
-                <div className="flex items-center gap-1 p-1 bg-white/5 rounded-sm border border-white/10">
+                {/* View Mode Pill */}
+                <div className="pointer-events-auto relative flex items-center gap-1 p-1.5 bg-void/40 backdrop-blur-3xl rounded-full border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+                    <div className="absolute inset-0 rounded-full border border-white/5 pointer-events-none" />
+
                     {(['YEAR', 'MONTH', 'WEEK', 'DAY'] as ViewMode[]).map(mode => (
                         <button
                             key={mode}
                             onClick={() => setViewMode(mode)}
                             className={clsx(
-                                "px-4 py-1.5 text-[9px] font-mono-technical rounded-sm transition-all border",
-                                viewMode === mode ? "bg-cyan-film/10 text-cyan-film border-cyan-film/20" : "text-smoke/30 hover:text-smoke/60 border-transparent"
+                                "px-4 py-1.5 text-[9px] font-mono-technical rounded-full transition-all border relative z-10",
+                                viewMode === mode
+                                    ? "bg-cyan-film/10 text-cyan-film border-cyan-film/20 shadow-[0_0_10px_rgba(78,205,196,0.1)]"
+                                    : "text-smoke/30 hover:text-smoke/60 border-transparent hover:bg-white/5"
                             )}
                         >
                             {mode}
@@ -213,133 +223,174 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
             </div>
 
             {/* Main Observation Deck */}
-            <div className="flex-1 min-h-0 relative flex items-center overflow-hidden">
+            <div className="flex-1 min-h-0 relative flex items-center justify-center overflow-hidden">
                 <div
                     ref={containerRef}
-                    className="w-full h-full overflow-x-auto pt-40 pb-24 no-scrollbar"
+                    className="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar flex items-center"
                 >
-                    <AnimatePresence mode="wait">
+                    <AnimatePresence mode="popLayout" initial={false}>
                         <motion.div
                             key={`${viewMode}-${selectedCategory}`}
                             initial={{ opacity: 0, filter: 'blur(20px)' }}
                             animate={{ opacity: 1, filter: 'blur(0px)' }}
                             exit={{ opacity: 0, filter: 'blur(20px)' }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="flex items-start gap-0 min-w-max px-[45dvw] h-full"
+                            className="flex items-center gap-0 min-w-max px-[45dvw] h-[60vh]"
                         >
                             {timelineData.map((node, index) => {
                                 const isActive = activeId === node.id
                                 return (
-                                    <div key={node.id} className="flex items-start" data-timeline-node data-id={node.id}>
+                                    <div key={node.id} className="flex items-center justify-center h-full pb-24 relative" data-timeline-node data-id={node.id}>
+                                        {/* Node Group - Centered on the timeline */}
                                         <div className={clsx(
-                                            "relative flex flex-col items-center group h-full transition-all duration-1000",
-                                            isActive ? "scale-100 opacity-100 filter-none" : "scale-90 opacity-30 blur-[2px] grayscale"
+                                            "relative z-10 flex items-center justify-center transition-all duration-1000",
+                                            isActive ? "scale-100 opacity-100 filter-none" : "scale-90 opacity-60 grayscale"
                                         )}>
-                                            {/* Date Label */}
+                                            {/* TOP SECTION: Label & Signal Line (Absolute, anchored to bottom of node) */}
                                             <div className={clsx(
-                                                "absolute -top-16 flex flex-col items-center transition-all duration-700",
-                                                isActive ? "scale-110 opacity-100" : "scale-100 opacity-30"
+                                                "absolute bottom-full mb-2 flex flex-col items-center transition-all duration-700 w-max",
+                                                isActive ? "opacity-100 translate-y-0" : "opacity-30 translate-y-2"
                                             )}>
+                                                {/* Date Label */}
                                                 <div className={clsx(
-                                                    "font-mono-technical text-[10px] tracking-[0.4em] font-bold transition-colors",
+                                                    "font-mono-technical text-[10px] tracking-[0.4em] font-bold mb-2 transition-colors",
                                                     isActive ? "text-cyan-film" : "text-smoke/40"
                                                 )}>
                                                     {node.label}
                                                 </div>
+
+                                                {/* Vertical Leader Line */}
                                                 <div className={clsx(
-                                                    "h-6 w-px bg-gradient-to-b transition-all duration-700 mt-2",
-                                                    isActive ? "from-cyan-film to-transparent h-10" : "from-cyan-film/20 to-transparent"
+                                                    "w-px bg-gradient-to-b from-transparent via-cyan-film/40 to-cyan-film/60 transition-all duration-1000",
+                                                    isActive ? "h-12" : "h-8"
                                                 )} />
                                             </div>
 
-                                            {/* Signal Lead */}
-                                            <div className={clsx(
-                                                "w-[1px] bg-gradient-to-b from-transparent via-white/10 to-cyan-film/60 transition-all duration-1000",
-                                                isActive ? "h-28 opacity-100" : "h-20 opacity-40"
-                                            )} />
-
-                                            {/* Celestial Node */}
+                                            {/* CENTER: The Celestial Node (Static) */}
                                             <div className="relative flex items-center justify-center">
-                                                {viewMode === 'DAY' && node.bucket ? (
-                                                    <Link href={`/archive/${node.bucket.id}`} className="relative">
-                                                        <motion.div
-                                                            animate={isActive ? {
-                                                                scale: [1, 1.2, 1],
-                                                                boxShadow: ["0 0 20px rgba(78,205,196,0.5)", "0 0 40px rgba(78,205,196,1)", "0 0 20px rgba(78,205,196,0.5)"]
-                                                            } : { scale: 1 }}
-                                                            transition={{ repeat: Infinity, duration: 4 }}
-                                                            className={clsx(
-                                                                "w-4 h-4 rounded-full border-2 transition-all duration-500 cursor-pointer z-10 relative",
-                                                                isActive ? "border-cyan-film bg-cyan-film" : "border-cyan-film/40 bg-transparent"
+                                                {node.bucket ? (
+                                                    viewMode === 'DAY' ? (
+                                                        <Link href={`/archive/${node.bucket.id}`} className="relative block group/node">
+                                                            <motion.div
+                                                                animate={isActive ? {
+                                                                    scale: [1, 1.2, 1],
+                                                                    boxShadow: ["0 0 20px rgba(78,205,196,0.5)", "0 0 40px rgba(78,205,196,1)", "0 0 20px rgba(78,205,196,0.5)"]
+                                                                } : { scale: 1 }}
+                                                                transition={{ repeat: Infinity, duration: 4 }}
+                                                                className={clsx(
+                                                                    "w-4 h-4 rounded-full border-2 transition-all duration-500 cursor-pointer relative z-20 bg-void",
+                                                                    isActive ? "border-cyan-film" : "border-cyan-film/40"
+                                                                )}
+                                                            />
+                                                            {isActive && (
+                                                                <div className="absolute inset-0 bg-cyan-film/40 blur-xl animate-pulse rounded-full z-10" />
                                                             )}
-                                                        />
-                                                        {isActive && (
-                                                            <div className="absolute inset-0 bg-cyan-film/40 blur-2xl animate-pulse rounded-full" />
-                                                        )}
-                                                    </Link>
-                                                ) : (
-                                                    <motion.div
-                                                        onClick={handleNodeClick}
-                                                        className={clsx(
-                                                            "w-6 h-6 rounded-full border backdrop-blur-sm flex items-center justify-center transition-all duration-500 cursor-pointer z-10 relative",
-                                                            isActive ? "border-cyan-film bg-cyan-film/10 shadow-[0_0_30px_rgba(78,205,196,0.3)]" : "border-white/10 bg-darkroom/40"
-                                                        )}
-                                                    >
-                                                        <div className={clsx(
-                                                            "w-1.5 h-1.5 rounded-full transition-all duration-500",
-                                                            isActive ? "bg-cyan-film shadow-[0_0_10px_rgba(78,205,196,1)] scale-125" : "bg-white/20"
-                                                        )} />
-                                                        <div className={clsx(
-                                                            "absolute -bottom-8 transition-all duration-500 font-mono-technical text-[7px] tracking-widest whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-sm border",
-                                                            isActive ? "opacity-100 translate-y-0 border-cyan-film/40 text-cyan-film" : "opacity-0 translate-y-2 border-transparent text-smoke/40"
-                                                        )}>
-                                                            {node.items.length} SPECTRA
+                                                        </Link>
+                                                    ) : (
+                                                        <div onClick={handleNodeClick} className="relative block group/node cursor-pointer">
+                                                            <motion.div
+                                                                animate={isActive ? {
+                                                                    scale: [1, 1.2, 1],
+                                                                    boxShadow: ["0 0 20px rgba(78,205,196,0.5)", "0 0 40px rgba(78,205,196,1)", "0 0 20px rgba(78,205,196,0.5)"]
+                                                                } : { scale: 1 }}
+                                                                transition={{ repeat: Infinity, duration: 4 }}
+                                                                className={clsx(
+                                                                    "w-4 h-4 rounded-full border-2 transition-all duration-500 relative z-20 bg-void",
+                                                                    isActive ? "border-cyan-film" : "border-cyan-film/40"
+                                                                )}
+                                                            />
+                                                            {isActive && (
+                                                                <div className="absolute inset-0 bg-cyan-film/40 blur-xl animate-pulse rounded-full z-10" />
+                                                            )}
                                                         </div>
-                                                    </motion.div>
+                                                    )
+                                                ) : (
+                                                    <div className="w-3 h-3 rounded-full border border-white/10 bg-void z-20" />
                                                 )}
                                             </div>
 
-                                            {/* Info HUD Card */}
+                                            {/* BOTTOM SECTION: Info Card (Absolute, anchored to top of node) */}
                                             <div className={clsx(
-                                                "mt-12 w-64 transition-all duration-700 flex flex-col items-center",
-                                                isActive ? "translate-y-0 opacity-100 scale-100" : "translate-y-4 opacity-0 scale-95"
+                                                "absolute top-full mt-6 flex flex-col items-center w-64 transition-all duration-700",
+                                                isActive ? "opacity-100 translate-y-0 scale-100" : "opacity-0 -translate-y-4 scale-95 pointer-events-none"
                                             )}>
-                                                {viewMode === 'DAY' && node.bucket ? (
-                                                    <Link href={`/archive/${node.bucket.id}`} className="block group/text text-center space-y-4">
-                                                        {node.bucket.thumbnail_url && (
-                                                            <div className="w-24 h-32 mx-auto mb-6 rounded-sm overflow-hidden border border-white/10 shadow-huge group-hover/text:border-cyan-film/50 transition-all duration-700 transform group-hover/text:scale-105">
-                                                                <img
-                                                                    src={node.bucket.thumbnail_url}
-                                                                    alt=""
-                                                                    className={clsx(
-                                                                        "w-full h-full object-cover transition-all duration-1000",
-                                                                        isActive ? "grayscale-0 saturate-100 scale-110" : "grayscale saturate-0 scale-100"
-                                                                    )}
-                                                                />
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-void/60 via-transparent to-transparent opacity-0 group-hover/text:opacity-100 transition-opacity" />
+                                                {node.bucket ? (
+                                                    viewMode === 'DAY' ? (
+                                                        <Link href={`/archive/${node.bucket.id}`} className="block group/text text-center space-y-4">
+                                                            {node.bucket.thumbnail_url && (
+                                                                <div className="w-24 h-32 mx-auto mb-6 rounded-sm overflow-hidden border border-white/10 shadow-huge group-hover/text:border-cyan-film/50 transition-all duration-700 transform group-hover/text:scale-105">
+                                                                    <img
+                                                                        src={node.bucket.thumbnail_url}
+                                                                        alt=""
+                                                                        className={clsx(
+                                                                            "w-full h-full object-cover transition-all duration-1000",
+                                                                            isActive ? "grayscale-0 saturate-100 scale-110" : "grayscale saturate-0 scale-100"
+                                                                        )}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-void/60 via-transparent to-transparent opacity-0 group-hover/text:opacity-100 transition-opacity" />
+                                                                </div>
+                                                            )}
+                                                            <h4 className={clsx(
+                                                                "text-base font-display transition-colors line-clamp-2 leading-relaxed tracking-wide px-4",
+                                                                isActive ? "text-celluloid" : "text-smoke/60"
+                                                            )}>
+                                                                {node.bucket.title}
+                                                            </h4>
+                                                            <div className="flex flex-col items-center gap-3">
+                                                                <div className={clsx(
+                                                                    "h-px transition-all duration-1000",
+                                                                    isActive ? "w-20 bg-cyan-film" : "w-4 bg-white/10"
+                                                                )} />
+                                                                <div className="font-mono-technical text-[8px] uppercase tracking-[0.4em] font-bold text-cyan-film/60">
+                                                                    {node.bucket.category}
+                                                                </div>
                                                             </div>
-                                                        )}
-                                                        <h4 className={clsx(
-                                                            "text-base font-display transition-colors line-clamp-2 leading-relaxed tracking-wide px-4",
-                                                            isActive ? "text-celluloid" : "text-smoke/60"
-                                                        )}>
-                                                            {node.bucket.title}
-                                                        </h4>
-                                                        <div className="flex flex-col items-center gap-3">
-                                                            <div className={clsx(
-                                                                "h-px transition-all duration-1000",
-                                                                isActive ? "w-20 bg-cyan-film" : "w-4 bg-white/10"
-                                                            )} />
-                                                            <div className="font-mono-technical text-[8px] uppercase tracking-[0.4em] font-bold text-cyan-film/60">
-                                                                {node.bucket.category}
+                                                        </Link>
+                                                    ) : (
+                                                        <div onClick={handleNodeClick} className="cursor-pointer group/text text-center space-y-4">
+                                                            {node.bucket.thumbnail_url ? (
+                                                                <div className="w-24 h-32 mx-auto mb-6 rounded-sm overflow-hidden border border-white/10 shadow-huge group-hover/text:border-cyan-film/50 transition-all duration-700 transform group-hover/text:scale-105">
+                                                                    <img
+                                                                        src={node.bucket.thumbnail_url}
+                                                                        alt=""
+                                                                        className={clsx(
+                                                                            "w-full h-full object-cover transition-all duration-1000",
+                                                                            isActive ? "grayscale-0 saturate-100 scale-110" : "grayscale saturate-0 scale-100"
+                                                                        )}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-void/60 via-transparent to-transparent opacity-0 group-hover/text:opacity-100 transition-opacity" />
+
+                                                                    {/* Overlay Badge for Count */}
+                                                                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md border border-white/10 px-1.5 py-0.5 rounded-sm">
+                                                                        <span className="text-[8px] font-mono-technical text-cyan-film tracking-wider">+{node.items.length}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-24 h-32 mx-auto mb-6 bg-white/5 flex items-center justify-center border border-white/10">
+                                                                    <div className="text-[10px] font-mono-technical text-smoke/40">{node.items.length} SPECTRA</div>
+                                                                </div>
+                                                            )}
+                                                            <h4 className={clsx(
+                                                                "text-base font-display transition-colors line-clamp-2 leading-relaxed tracking-wide px-4",
+                                                                isActive ? "text-celluloid" : "text-smoke/60"
+                                                            )}>
+                                                                {node.label} Highlights
+                                                            </h4>
+                                                            <div className="flex flex-col items-center gap-3">
+                                                                <div className={clsx(
+                                                                    "h-px transition-all duration-1000",
+                                                                    isActive ? "w-20 bg-cyan-film" : "w-4 bg-white/10"
+                                                                )} />
+                                                                <div className="font-mono-technical text-[8px] uppercase tracking-[0.4em] font-bold text-cyan-film/60">
+                                                                    Drill Down
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </Link>
+                                                    )
                                                 ) : (
                                                     <div className="space-y-4 flex flex-col items-center">
                                                         <div className="h-px w-8 bg-white/10" />
-                                                        <p className="text-[8px] font-mono-technical text-smoke/40 uppercase tracking-[0.4em]">Celestial_Cluster</p>
-                                                        <p className="text-sm font-display text-celluloid/80 italic">{node.items.length} Recorded Spectra</p>
+                                                        <p className="text-[8px] font-mono-technical text-smoke/40 uppercase tracking-[0.4em]">Void_Sector</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -348,7 +399,7 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                                         {/* Interstellar Trail */}
                                         {index < timelineData.length - 1 && (
                                             <div className={clsx(
-                                                "w-56 mt-[112px] h-[1px] transition-all duration-1000",
+                                                "w-56 h-[1px] transition-all duration-1000 self-center",
                                                 isActive ? "bg-gradient-to-r from-cyan-film to-cyan-film/10 opacity-40" : "bg-white/5 opacity-10"
                                             )} />
                                         )}
@@ -357,9 +408,9 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                             })}
 
                             {/* End Void Indicator */}
-                            <div className="flex items-center">
-                                <div className="w-96 mt-[112px] h-px bg-gradient-to-r from-cyan-film/40 to-transparent opacity-10" />
-                                <div className="mt-[112px] ml-12 flex items-center gap-4">
+                            <div className="flex items-center h-full pb-24">
+                                <div className="w-96 h-px bg-gradient-to-r from-cyan-film/40 to-transparent opacity-10" />
+                                <div className="ml-12 flex items-center gap-4">
                                     <div className="flex gap-2">
                                         <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 2 }} className="w-1.5 h-1.5 rounded-full bg-cyan-film/40 shadow-[0_0_10px_rgba(78,205,196,1)]" />
                                         <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 2, delay: 0.5 }} className="w-1.5 h-1.5 rounded-full bg-cyan-film/40 shadow-[0_0_10px_rgba(78,205,196,1)]" />
@@ -373,7 +424,7 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
             </div>
 
             {/* Bottom HUD Seeker */}
-            <div className="shrink-0 w-full px-12 pb-12 relative z-30">
+            <div className="shrink-0 w-full px-12 pb-4 relative z-30">
                 <div className="max-w-3xl mx-auto space-y-6">
                     {/* Progress HUD */}
                     <div className="relative h-[2px] w-full bg-white/5 overflow-visible rounded-full">
