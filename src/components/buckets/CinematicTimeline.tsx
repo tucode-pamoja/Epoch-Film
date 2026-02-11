@@ -25,7 +25,6 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
 
     const baseFilteredBuckets = useMemo(() => {
         return buckets
-            .filter(b => b.status === 'ACHIEVED')
             .filter(b => selectedCategory === 'ALL' || b.category === selectedCategory)
             .sort((a, b) =>
                 new Date(a.updated_at || a.created_at).getTime() - new Date(b.updated_at || b.created_at).getTime()
@@ -100,22 +99,29 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
         else if (viewMode === 'WEEK') setViewMode('DAY')
     }
 
+    // Set default active node when data changes
+    useEffect(() => {
+        if (timelineData.length > 0) {
+            setActiveId(timelineData[0].id)
+        }
+    }, [timelineData])
+
     useEffect(() => {
         const container = containerRef.current
         if (!container) return
 
         const handleScroll = () => {
             const { scrollLeft, scrollWidth, clientWidth } = container
-            if (scrollWidth <= clientWidth) {
-                setScrollProgress(0)
-                return
-            }
-            const progress = scrollLeft / (scrollWidth - clientWidth)
+            const progress = scrollWidth > clientWidth
+                ? scrollLeft / (scrollWidth - clientWidth)
+                : 0
             setScrollProgress(progress)
 
             // Track active node in center
             const nodes = container.querySelectorAll('[data-timeline-node]')
-            let closestId = null
+            if (nodes.length === 0) return
+
+            let closestId: string | null = null
             let minDistance = Infinity
             const viewportCenter = clientWidth / 2
 
@@ -128,13 +134,27 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                     closestId = node.getAttribute('data-id')
                 }
             })
-            setActiveId(closestId)
+            if (closestId) setActiveId(closestId)
         }
 
         container.addEventListener('scroll', handleScroll, { passive: true })
-        handleScroll() // Initial check
 
-        return () => container.removeEventListener('scroll', handleScroll)
+        // Delayed initial check: scroll first node to center, then detect active
+        const timer = setTimeout(() => {
+            const firstNode = container.querySelector('[data-timeline-node]')
+            if (firstNode) {
+                const containerRect = container.getBoundingClientRect()
+                const nodeRect = firstNode.getBoundingClientRect()
+                const scrollTarget = container.scrollLeft + (nodeRect.left + nodeRect.width / 2) - (containerRect.left + containerRect.width / 2)
+                container.scrollTo({ left: scrollTarget, behavior: 'instant' })
+            }
+            handleScroll()
+        }, 500)
+
+        return () => {
+            container.removeEventListener('scroll', handleScroll)
+            clearTimeout(timer)
+        }
     }, [timelineData, viewMode])
 
     if (buckets.length === 0) return (
@@ -223,24 +243,24 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
             </div>
 
             {/* Main Observation Deck */}
-            <div className="flex-1 min-h-0 relative flex items-center justify-center overflow-hidden">
+            <div className="flex-1 relative flex items-center justify-center overflow-visible">
                 <div
                     ref={containerRef}
                     className="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar flex items-center"
                 >
-                    <AnimatePresence mode="popLayout" initial={false}>
+                    <AnimatePresence mode="wait">
                         <motion.div
                             key={`${viewMode}-${selectedCategory}`}
-                            initial={{ opacity: 0, filter: 'blur(20px)' }}
-                            animate={{ opacity: 1, filter: 'blur(0px)' }}
-                            exit={{ opacity: 0, filter: 'blur(20px)' }}
-                            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="flex items-center gap-0 min-w-max px-[45dvw] h-[60vh]"
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                            className="flex items-center gap-0 min-w-max px-[45dvw] h-full"
                         >
                             {timelineData.map((node, index) => {
                                 const isActive = activeId === node.id
                                 return (
-                                    <div key={node.id} className="flex items-center justify-center h-full pb-24 relative" data-timeline-node data-id={node.id}>
+                                    <div key={node.id} className="flex items-center justify-center h-full pb-15 relative" data-timeline-node data-id={node.id}>
                                         {/* Node Group - Centered on the timeline */}
                                         <div className={clsx(
                                             "relative z-10 flex items-center justify-center transition-all duration-1000",
@@ -311,7 +331,7 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
 
                                             {/* BOTTOM SECTION: Info Card (Absolute, anchored to top of node) */}
                                             <div className={clsx(
-                                                "absolute top-full mt-6 flex flex-col items-center w-64 transition-all duration-700",
+                                                "absolute top-full mt-8 flex flex-col items-center w-64 transition-all duration-700",
                                                 isActive ? "opacity-100 translate-y-0 scale-100" : "opacity-0 -translate-y-4 scale-95 pointer-events-none"
                                             )}>
                                                 {node.bucket ? (
@@ -366,8 +386,8 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <div className="w-24 h-32 mx-auto mb-6 bg-white/5 flex items-center justify-center border border-white/10">
-                                                                    <div className="text-[10px] font-mono-technical text-smoke/40">{node.items.length} SPECTRA</div>
+                                                                <div className="w-18 h-12 mx-auto mb-3 bg-white/5 flex items-center justify-center border border-white/10 rounded-sm">
+                                                                    <div className="text-[8px] font-mono-technical text-smoke/40">{node.items.length} SPECTRA</div>
                                                                 </div>
                                                             )}
                                                             <h4 className={clsx(
@@ -399,7 +419,7 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                                         {/* Interstellar Trail */}
                                         {index < timelineData.length - 1 && (
                                             <div className={clsx(
-                                                "w-56 h-[1px] transition-all duration-1000 self-center",
+                                                "w-56 h-[2px] transition-all duration-1000 self-center",
                                                 isActive ? "bg-gradient-to-r from-cyan-film to-cyan-film/10 opacity-40" : "bg-white/5 opacity-10"
                                             )} />
                                         )}
@@ -408,9 +428,9 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                             })}
 
                             {/* End Void Indicator */}
-                            <div className="flex items-center h-full pb-24">
-                                <div className="w-96 h-px bg-gradient-to-r from-cyan-film/40 to-transparent opacity-10" />
-                                <div className="ml-12 flex items-center gap-4">
+                            <div className="flex items-center h-full pb-15">
+                                <div className="w-96 h-px bg-gradient-to-r from-cyan-film/40 to-transparent opacity-2" />
+                                <div className="ml-24 flex items-center gap-4">
                                     <div className="flex gap-2">
                                         <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 2 }} className="w-1.5 h-1.5 rounded-full bg-cyan-film/40 shadow-[0_0_10px_rgba(78,205,196,1)]" />
                                         <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 2, delay: 0.5 }} className="w-1.5 h-1.5 rounded-full bg-cyan-film/40 shadow-[0_0_10px_rgba(78,205,196,1)]" />
@@ -421,60 +441,29 @@ export function CinematicTimeline({ buckets }: CinematicTimelineProps) {
                         </motion.div>
                     </AnimatePresence>
                 </div>
-            </div>
 
-            {/* Bottom HUD Seeker */}
-            <div className="shrink-0 w-full px-12 pb-4 relative z-30">
-                <div className="max-w-3xl mx-auto space-y-6">
-                    {/* Progress HUD */}
-                    <div className="relative h-[2px] w-full bg-white/5 overflow-visible rounded-full">
-                        <motion.div
-                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-transparent via-cyan-film/60 to-cyan-film shadow-[0_0_15px_rgba(78,205,196,0.5)] rounded-full"
-                            style={{ width: `${scrollProgress * 100}%` }}
-                        />
-                        <motion.div
-                            className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center"
-                            style={{ left: `${scrollProgress * 100}%` }}
-                        >
-                            <div className="w-6 h-6 flex items-center justify-center border border-cyan-film/40 rounded-full bg-darkroom/80 backdrop-blur-md shadow-[0_0_20px_rgba(78,205,196,0.3)]">
-                                <div className="w-1 h-1 bg-cyan-film shadow-[0_0_10px_rgba(78,205,196,1)] rounded-full" />
-                            </div>
-                        </motion.div>
+                {/* Side Navigation Arrows */}
+                <motion.button
+                    whileHover={{ x: -3 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="absolute left-10 top-[44%] -translate-y-1/2 z-30 group"
+                    onClick={() => containerRef.current?.scrollBy({ left: -600, behavior: 'smooth' })}
+                >
+                    <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center group-hover:border-cyan-film/30 transition-all bg-darkroom/60 backdrop-blur-sm">
+                        <ChevronLeft size={20} className="text-smoke/40 group-hover:text-cyan-film transition-colors" />
                     </div>
+                </motion.button>
 
-                    {/* Navigation Controls */}
-                    <div className="flex items-center justify-between">
-                        <motion.button
-                            whileHover={{ x: -8 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="flex items-center gap-6 group"
-                            onClick={() => containerRef.current?.scrollBy({ left: -600, behavior: 'smooth' })}
-                        >
-                            <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center group-hover:border-cyan-film/30 transition-all bg-white/5">
-                                <ChevronLeft size={18} className="text-smoke/40 group-hover:text-cyan-film transition-colors" />
-                            </div>
-                            <div className="hidden md:flex flex-col items-start opacity-40 group-hover:opacity-100 transition-opacity">
-                                <span className="text-[7px] font-mono-technical text-cyan-film/60 uppercase tracking-[0.4em]">Signal_Back</span>
-                                <span className="text-[10px] font-display text-smoke uppercase tracking-widest">Previous_Sector</span>
-                            </div>
-                        </motion.button>
-
-                        <motion.button
-                            whileHover={{ x: 8 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="flex items-center gap-6 group"
-                            onClick={() => containerRef.current?.scrollBy({ left: 600, behavior: 'smooth' })}
-                        >
-                            <div className="hidden md:flex flex-col items-end opacity-40 group-hover:opacity-100 transition-opacity">
-                                <span className="text-[7px] font-mono-technical text-cyan-film/60 uppercase tracking-[0.4em]">Signal_Next</span>
-                                <span className="text-[10px] font-display text-smoke uppercase tracking-widest">Advance_Sector</span>
-                            </div>
-                            <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center group-hover:border-cyan-film/30 transition-all bg-white/5">
-                                <ChevronRight size={18} className="text-smoke/40 group-hover:text-cyan-film transition-colors" />
-                            </div>
-                        </motion.button>
+                <motion.button
+                    whileHover={{ x: 3 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="absolute right-10 top-[44%] -translate-y-1/2 z-30 group"
+                    onClick={() => containerRef.current?.scrollBy({ left: 600, behavior: 'smooth' })}
+                >
+                    <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center group-hover:border-cyan-film/30 transition-all bg-darkroom/60 backdrop-blur-sm">
+                        <ChevronRight size={20} className="text-smoke/40 group-hover:text-cyan-film transition-colors" />
                     </div>
-                </div>
+                </motion.button>
             </div>
         </div>
     )
