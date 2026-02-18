@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useOptimistic, useMemo, useRef } from 'react'
+import { useState, useTransition, useOptimistic, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Ticket,
@@ -45,6 +45,7 @@ import { CastingModal } from '@/components/archive/CastingModal'
 import { FlashBulb } from '@/components/layout/FlashBulb'
 import { saveMemory, updateBucket, updateMemory, deleteMemory, updateMemoryCaption, updateMemoryImage, setBucketThumbnail, issueTicket, remakeBucket, inviteCast, getMutualFollowers, deleteBucket } from '@/app/archive/actions'
 import { toast } from 'sonner'
+import { createClient } from '@/utils/supabase/client'
 
 
 interface BucketDetailClientProps {
@@ -74,9 +75,42 @@ export function BucketDetailClient({ bucket, memories, letters, comments, curren
     const [hasIssuedTicket, setHasIssuedTicket] = useState(initialHasIssuedTicket)
     const [isPending, startTransition] = useTransition()
 
+    const supabase = createClient()
+    const [realtimeTicketCount, setRealtimeTicketCount] = useState(bucket.tickets || 0)
+
+    // Sync with prop updates (revalidation)
+    useEffect(() => {
+        setRealtimeTicketCount(bucket.tickets || 0)
+    }, [bucket.tickets])
+
+    // Real-time subscription for tickets
+    useEffect(() => {
+        const channel = supabase
+            .channel(`bucket-tickets-${bucket.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'buckets',
+                    filter: `id=eq.${bucket.id}`
+                },
+                (payload) => {
+                    if (payload.new.tickets !== undefined) {
+                        setRealtimeTicketCount(payload.new.tickets)
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [bucket.id, supabase])
+
     // Optimistic State for Tickets
     const [optimisticTicketState, addOptimisticTicket] = useOptimistic(
-        { hasIssued: hasIssuedTicket, count: bucket.tickets || 0 },
+        { hasIssued: hasIssuedTicket, count: realtimeTicketCount },
         (state, newHasIssued: boolean) => ({
             hasIssued: newHasIssued,
             count: newHasIssued ? state.count + 1 : state.count - 1

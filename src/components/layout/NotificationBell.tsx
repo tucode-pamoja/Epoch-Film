@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Bell, MessageSquare, Ticket, Trophy, Trash2, CheckCircle2 } from 'lucide-react'
+import { Bell, MessageSquare, Ticket, Trophy, Trash2, CheckCircle2, Users } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/utils/supabase/client'
-import { getNotifications, markNotificationAsRead, clearNotifications } from '@/app/archive/actions'
+import { getNotifications, markNotificationAsRead, clearNotifications, respondToCastInvitation } from '@/app/archive/actions'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { toast } from 'sonner'
 
 export function NotificationBell() {
     const [notifications, setNotifications] = useState<any[]>([])
@@ -68,24 +69,44 @@ export function NotificationBell() {
         }
     }
 
+    const handleResponse = async (notificationId: string, bucketId: string, status: 'accepted' | 'rejected') => {
+        try {
+            const result = await respondToCastInvitation(bucketId, status)
+            if (result.success) {
+                toast.success(status === 'accepted' ? 'Casting invitation accepted!' : 'Invitation declined')
+                // Mark as read after responding
+                await handleMarkAsRead(notificationId)
+                // Refresh to update UI potentially or redirect?
+                // For now just update notification state
+            } else {
+                toast.error(result.error || 'Failed to respond')
+            }
+        } catch (err) {
+            console.error(err)
+            toast.error('An error occurred')
+        }
+    }
+
     const getIcon = (type: string) => {
         switch (type) {
             case 'COMMENT': return <MessageSquare size={14} className="text-cyan-film" />
             case 'TICKET': return <Ticket size={14} className="text-gold-film" />
             case 'ACHIEVEMENT': return <Trophy size={14} className="text-purple-400" />
+            case 'CASTING': return <Users size={14} className="text-white" />
             default: return <Bell size={14} />
         }
     }
 
     const getMessage = (n: any) => {
-        const actor = n.actor?.nickname || '누군가'
-        const title = n.bucket?.title ? `"${n.bucket.title}"` : '게시물'
+        const actor = n.actor?.nickname || 'Someone'
+        const title = n.bucket?.title ? `"${n.bucket.title}"` : 'a scene'
 
         switch (n.type) {
-            case 'COMMENT': return `${actor}님이 ${title}에 리뷰를 남겼습니다.`
-            case 'TICKET': return `${actor}님이 ${title} 티켓을 발행했습니다.`
-            case 'ACHIEVEMENT': return `새로운 업적을 달성했습니다!`
-            default: return '새로운 알림이 있습니다.'
+            case 'COMMENT': return `${actor} left a review on ${title}.`
+            case 'TICKET': return `${actor} issued a ticket for ${title}.`
+            case 'ACHIEVEMENT': return `New achievement unlocked!`
+            case 'CASTING': return `${actor} invited you to co-direct ${title}.`
+            default: return 'You have a new notification.'
         }
     }
 
@@ -156,7 +177,25 @@ export function NotificationBell() {
                                                 <p className={`text-xs leading-relaxed ${!n.is_read ? 'text-white' : 'text-smoke'}`}>
                                                     {getMessage(n)}
                                                 </p>
-                                                <div className="flex items-center justify-between">
+
+                                                {n.type === 'CASTING' && !n.is_read && (
+                                                    <div className="flex items-center gap-2 mt-2" onClick={e => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => handleResponse(n.id, n.bucket_id, 'accepted')}
+                                                            className="px-3 py-1 bg-gold-film text-void text-[10px] font-bold rounded-sm hover:bg-gold-warm transition-colors uppercase tracking-wider"
+                                                        >
+                                                            Accept
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleResponse(n.id, n.bucket_id, 'rejected')}
+                                                            className="px-3 py-1 bg-white/10 text-smoke text-[10px] rounded-sm hover:bg-white/20 transition-colors uppercase tracking-wider"
+                                                        >
+                                                            Decline
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center justify-between mt-1">
                                                     <span className="text-[9px] text-smoke/50 font-mono-technical">
                                                         {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ko })}
                                                     </span>

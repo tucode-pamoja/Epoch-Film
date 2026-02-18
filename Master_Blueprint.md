@@ -22,7 +22,7 @@ EPOCH Film은 **"인생을 영화처럼 기록한다"**는 철학을 바탕으�
 
 🚧 Phase 2: 고도화 및 사용자 경험 정제 (Current Tasks)
 • [Frontend Master] 상세 페이지 내 시네마틱 드래프팅 경험 고도화 (스크린플레이 입력, 슬레이트 애니메이션).
-• [Backend Wizard] 협업 제작(Casting) 수락 시 공동 편집 권한 로직 정교화.
+• [x] [Backend Wizard] 협업 제작(Casting) 수락 시 공동 편집 권한 로직 정교화 (Role-based RLS & Server Actions 적용 완료).
 • [Visual Master] 타임라인 내 루틴 수행 기록(Footprint) 시각화 도구 설계.
 • [Technical Inspector] 대규모 데이터 로딩 시의 성능 최적화 및 엣지 케이스 테스트.
 

@@ -158,20 +158,26 @@ export async function saveMemory(bucketId: string, formData: FormData) {
   }
 
   const isOwner = bucket.user_id === user.id
-  let isAcceptedCast = false
+  let hasWritePermission = isOwner
 
   if (!isOwner) {
+    // Check if user is an accepted cast member with appropriate role
     const { data: castMember } = await supabase
       .from('bucket_casts')
-      .select('is_accepted')
+      .select('role, is_accepted')
       .eq('bucket_id', bucketId)
       .eq('user_id', user.id)
       .single()
 
-    isAcceptedCast = !!castMember?.is_accepted
+    if (castMember?.is_accepted) {
+      // CO_DIRECTOR and ACTOR can both add memories
+      if (castMember.role === 'CO_DIRECTOR' || castMember.role === 'ACTOR') {
+        hasWritePermission = true
+      }
+    }
   }
 
-  if (!isOwner && !isAcceptedCast) {
+  if (!hasWritePermission) {
     return { success: false, error: '이 시나리오에 기록을 추가할 권한이 없습니다.', code: 'FORBIDDEN' }
   }
 
@@ -862,6 +868,33 @@ export async function updateBucket(bucketId: string, formData: FormData) {
   const description = formData.get('description') as string
   const isPublic = formData.get('isPublic') === 'true'
 
+  // Check permission: Owner or Co-Director
+  const { data: bucket } = await supabase
+    .from('buckets')
+    .select('user_id')
+    .eq('id', bucketId)
+    .single()
+
+  if (!bucket) throw new Error('Project not found')
+
+  const isOwner = bucket.user_id === user.id
+  let hasPermission = isOwner
+
+  if (!isOwner) {
+    const { data: cast } = await supabase
+      .from('bucket_casts')
+      .select('role, is_accepted')
+      .eq('bucket_id', bucketId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (cast?.is_accepted && cast.role === 'CO_DIRECTOR') {
+      hasPermission = true
+    }
+  }
+
+  if (!hasPermission) throw new Error('Unauthorized')
+
   const { error } = await supabase
     .from('buckets')
     .update({
@@ -871,7 +904,7 @@ export async function updateBucket(bucketId: string, formData: FormData) {
       is_public: isPublic,
     })
     .eq('id', bucketId)
-    .eq('user_id', user.id)
+  // Removed .eq('user_id', user.id) since we already checked permission
 
   if (error) {
     console.error('Error updating bucket:', error)
@@ -890,11 +923,24 @@ export async function updateMemory(memoryId: string, formData: FormData) {
   const caption = formData.get('caption') as string
   const bucketId = formData.get('bucketId') as string
 
+  const { data: memory } = await supabase.from('memories').select('user_id, bucket_id').eq('id', memoryId).single()
+  if (!memory) throw new Error('Record not found')
+
+  let hasPermission = memory.user_id === user.id
+  if (!hasPermission) {
+    const { data: bucket } = await supabase.from('buckets').select('user_id').eq('id', memory.bucket_id).single()
+    if (bucket && bucket.user_id === user.id) hasPermission = true
+    else {
+      const { data: cast } = await supabase.from('bucket_casts').select('role, is_accepted').eq('bucket_id', memory.bucket_id).eq('user_id', user.id).single()
+      if (cast?.is_accepted && cast.role === 'CO_DIRECTOR') hasPermission = true
+    }
+  }
+  if (!hasPermission) throw new Error('Unauthorized')
+
   const { error } = await supabase
     .from('memories')
     .update({ caption })
     .eq('id', memoryId)
-    .eq('user_id', user.id)
 
   if (error) {
     console.error('Error updating memory:', error)
@@ -909,11 +955,50 @@ export async function deleteMemory(memoryId: string, bucketId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Check Permission: Author OR Bucket Owner OR Co-Director
+  const { data: memory } = await supabase
+    .from('memories')
+    .select('user_id, bucket_id')
+    .eq('id', memoryId)
+    .single()
+
+  if (!memory) throw new Error('Record not found')
+
+  let hasPermission = false
+  if (memory.user_id === user.id) {
+    hasPermission = true
+  } else {
+    // Check Bucket Owner
+    const { data: bucket } = await supabase
+      .from('buckets')
+      .select('user_id')
+      .eq('id', memory.bucket_id)
+      .single()
+
+    if (bucket && bucket.user_id === user.id) {
+      hasPermission = true
+    } else {
+      // Check Co-Director
+      const { data: cast } = await supabase
+        .from('bucket_casts')
+        .select('role, is_accepted')
+        .eq('bucket_id', memory.bucket_id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (cast?.is_accepted && cast.role === 'CO_DIRECTOR') {
+        hasPermission = true
+      }
+    }
+  }
+
+  if (!hasPermission) throw new Error('Unauthorized')
+
   const { error } = await supabase
     .from('memories')
     .delete()
     .eq('id', memoryId)
-    .eq('user_id', user.id)
+  // Removed .eq('user_id', user.id)
 
   if (error) {
     console.error('Error deleting memory detail:', error)
@@ -928,11 +1013,24 @@ export async function updateMemoryCaption(memoryId: string, bucketId: string, ca
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: memory } = await supabase.from('memories').select('user_id, bucket_id').eq('id', memoryId).single()
+  if (!memory) throw new Error('Record not found')
+
+  let hasPermission = memory.user_id === user.id
+  if (!hasPermission) {
+    const { data: bucket } = await supabase.from('buckets').select('user_id').eq('id', memory.bucket_id).single()
+    if (bucket && bucket.user_id === user.id) hasPermission = true
+    else {
+      const { data: cast } = await supabase.from('bucket_casts').select('role, is_accepted').eq('bucket_id', memory.bucket_id).eq('user_id', user.id).single()
+      if (cast?.is_accepted && cast.role === 'CO_DIRECTOR') hasPermission = true
+    }
+  }
+  if (!hasPermission) throw new Error('Unauthorized')
+
   const { error } = await supabase
     .from('memories')
     .update({ caption })
     .eq('id', memoryId)
-    .eq('user_id', user.id)
 
   if (error) {
     console.error('Error updating memory caption:', error)
@@ -946,6 +1044,20 @@ export async function updateMemoryImage(memoryId: string, bucketId: string, form
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const { data: memory } = await supabase.from('memories').select('user_id, bucket_id').eq('id', memoryId).single()
+  if (!memory) throw new Error('Record not found')
+
+  let hasPermission = memory.user_id === user.id
+  if (!hasPermission) {
+    const { data: bucket } = await supabase.from('buckets').select('user_id').eq('id', memory.bucket_id).single()
+    if (bucket && bucket.user_id === user.id) hasPermission = true
+    else {
+      const { data: cast } = await supabase.from('bucket_casts').select('role, is_accepted').eq('bucket_id', memory.bucket_id).eq('user_id', user.id).single()
+      if (cast?.is_accepted && cast.role === 'CO_DIRECTOR') hasPermission = true
+    }
+  }
+  if (!hasPermission) throw new Error('Unauthorized')
 
   const imageFile = formData.get('image') as File
   if (!imageFile) {
@@ -1018,7 +1130,6 @@ export async function updateMemoryImage(memoryId: string, bucketId: string, form
     .from('memories')
     .update({ media_url: publicUrl })
     .eq('id', memoryId)
-    .eq('user_id', user.id)
 
   if (updateError) {
     console.error('Error updating memory image:', updateError)
@@ -1033,11 +1144,24 @@ export async function setBucketThumbnail(bucketId: string, imageUrl: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Check permission: Owner or Co-Director
+  const { data: bucket } = await supabase.from('buckets').select('user_id').eq('id', bucketId).single()
+  if (!bucket) throw new Error('Project not found')
+
+  const isOwner = bucket.user_id === user.id
+  let hasPermission = isOwner
+
+  if (!isOwner) {
+    const { data: cast } = await supabase.from('bucket_casts').select('role, is_accepted').eq('bucket_id', bucketId).eq('user_id', user.id).single()
+    if (cast?.is_accepted && cast.role === 'CO_DIRECTOR') hasPermission = true
+  }
+
+  if (!hasPermission) throw new Error('Unauthorized')
+
   const { error } = await supabase
     .from('buckets')
     .update({ thumbnail_url: imageUrl })
     .eq('id', bucketId)
-    .eq('user_id', user.id)
 
   if (error) {
     console.error('Error setting thumbnail detail:', error)
@@ -1457,83 +1581,19 @@ export async function issueTicket(bucketId: string) {
   if (!user) return { success: false, error: '로그인이 필요합니다.' }
 
   try {
-    // 1. Check if already issued
-    const { data: existingTicket } = await supabase
-      .from('bucket_tickets')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('bucket_id', bucketId)
-      .single()
+    const { data: result, error } = await supabase.rpc('issue_bucket_ticket', {
+      p_bucket_id: bucketId,
+      p_user_id: user.id
+    })
 
-    if (existingTicket) {
-      return { success: false, error: '이미 티켓을 발행했습니다.' }
-    }
-
-    // 2. Check if user has daily tickets
-    // 2. No daily limit check needed (Tickets are like 'Likes')
-
-    // 3. Issue Ticket Operations (Sequential)
-
-    // A. Insert ticket record
-    const { error: insertError } = await supabase
-      .from('bucket_tickets')
-      .insert({ user_id: user.id, bucket_id: bucketId })
-
-    if (insertError) {
-      console.error('Ticket insert failed:', insertError)
+    if (error) {
+      console.error('RPC Error:', error)
       return { success: false, error: '티켓 발행 중 오류가 발생했습니다.' }
     }
 
-    // B. Add XP to issuer (Reward for appreciating art)
-    // We fetch user XP first to increment safely
-    const { data: userData } = await supabase
-      .from('users')
-      .select('xp')
-      .eq('id', user.id)
-      .single()
-
-    await supabase
-      .from('users')
-      .update({
-        xp: (userData?.xp || 0) + 5
-      })
-      .eq('id', user.id)
-
-    // C. Increment bucket ticket count & Get Owner ID
-    const { data: bucketData } = await supabase
-      .from('buckets')
-      .select('user_id, tickets')
-      .eq('id', bucketId)
-      .single()
-
-    if (bucketData) {
-      await supabase
-        .from('buckets')
-        .update({ tickets: (bucketData.tickets || 0) + 1 })
-        .eq('id', bucketId)
-
-      // D. Reward Owner
-      const ownerId = bucketData.user_id
-      if (ownerId && ownerId !== user.id) {
-        const { data: ownerData } = await supabase.from('users').select('xp').eq('id', ownerId).single()
-        if (ownerData) {
-          await supabase.from('users').update({ xp: (ownerData.xp || 0) + 20 }).eq('id', ownerId)
-        }
-      }
-    }
-
-    // 4. Create notification for the bucket owner
-    try {
-      if (bucketData && bucketData.user_id && bucketData.user_id !== user.id) {
-        await supabase.from('notifications').insert({
-          user_id: bucketData.user_id,
-          actor_id: user.id,
-          bucket_id: bucketId,
-          type: 'TICKET'
-        })
-      }
-    } catch (notifError) {
-      console.warn('Failed to send notification:', notifError)
+    // result might be null if RPC returns void, but we defined it to return JSONB
+    if (result && !result.success) {
+      return { success: false, error: result.message }
     }
 
     revalidatePath('/explore')
@@ -1541,11 +1601,12 @@ export async function issueTicket(bucketId: string) {
     revalidatePath(`/archive/${bucketId}`)
 
     return { success: true }
-
   } catch (error: any) {
     console.error('Ticket issuing error:', error)
     return { success: false, error: error.message || '알 수 없는 오류가 발생했습니다.' }
   }
+
+
 }
 
 export async function getComments(bucketId: string) {
@@ -1856,3 +1917,135 @@ export async function respondToCast(bucketId: string, castId: string, status: 'a
   revalidatePath(`/archive/${bucketId}`)
   revalidatePath('/archive')
 }
+
+export async function respondToCastInvitation(bucketId: string, status: 'accepted' | 'rejected') {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'User not authenticated' }
+  }
+
+  // Find the cast record for this user and bucket
+  const { data: cast, error: findError } = await supabase
+    .from('bucket_casts')
+    .select('id')
+    .eq('bucket_id', bucketId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (findError || !cast) {
+    console.error('Cast record not found for invitation:', findError)
+    return { success: false, error: 'Invitation not found or expires' }
+  }
+
+  // Update status
+  const { error: updateError } = await supabase
+    .from('bucket_casts')
+    .update({
+      status,
+      is_accepted: status === 'accepted',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', cast.id)
+
+  if (updateError) {
+    return { success: false, error: 'Failed to respond to invitation' }
+  }
+
+  revalidatePath(`/archive/${bucketId}`)
+  revalidatePath('/archive')
+  return { success: true }
+}
+
+export async function updateProfile(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: '로그인이 필요합니다.' }
+  }
+
+  const nickname = (formData.get('nickname') as string)?.trim()
+  const introduction = (formData.get('introduction') as string)?.trim()
+  const profileImage = formData.get('profile_image') as File | null
+
+  if (!nickname) {
+    return { success: false, error: '감독명(닉네임)은 필수입니다.' }
+  }
+
+  const updates: any = {
+    nickname,
+    introduction,
+    updated_at: new Date().toISOString()
+  }
+
+  // Handle Image Upload
+  if (profileImage && profileImage.size > 0) {
+    if (profileImage.size > 5 * 1024 * 1024) {
+      return { success: false, error: '프로필 이미지는 5MB를 초과할 수 없습니다.' }
+    }
+
+    const fileExt = profileImage.name.split('.').pop()
+    const filePath = `${user.id}/profile_${Date.now()}.${fileExt}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('profiles')
+      .upload(filePath, profileImage)
+
+    if (uploadError) {
+      console.error('Profile image upload error:', uploadError)
+      return { success: false, error: '이미지 업로드에 실패했습니다.' }
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('profiles')
+      .getPublicUrl(filePath)
+
+    updates.profile_image_url = publicUrl
+  }
+
+  /* 
+  // Reverting to direct update. The RPC function was not found in the cache.
+  // We will force a schema refresh by modifying the table structure in a migration.
+  */
+  const { error } = await supabase
+    .from('users')
+    .update(updates)
+    .eq('id', user.id)
+
+  if (error) {
+    console.error('Profile update error:', error)
+    return { success: false, error: error.message || '프로필 업데이트에 실패했습니다.' }
+  }
+
+  revalidatePath(`/profile/${user.id}`)
+  revalidatePath('/profile')
+  revalidatePath('/explore') // Update explore page where users are listed
+  return { success: true }
+}
+
+export async function updateSettings(settings: any) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: '로그인이 필요합니다.' }
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update({
+      settings,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', user.id)
+
+  if (error) {
+    console.error('Settings update error details:', error)
+    return { success: false, error: `설정 저장에 실패했습니다: ${error.message}` }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+

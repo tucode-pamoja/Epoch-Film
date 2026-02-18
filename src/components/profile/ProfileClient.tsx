@@ -8,6 +8,9 @@ import { QuestList } from '@/components/dashboard/QuestList'
 import clsx from 'clsx'
 import { signOut } from '@/app/login/actions'
 import { FollowButton } from '@/components/archive/FollowButton'
+import { toast } from 'sonner'
+import { EditIdentityModal } from './EditIdentityModal'
+import { SettingsModal } from './SettingsModal'
 
 interface Bucket {
     id: string
@@ -56,6 +59,8 @@ interface ProfileClientProps {
 export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = true, currentUserId }: ProfileClientProps) {
     const [activeTab, setActiveTab] = useState<'SCENES' | 'ROUTINES' | 'QUESTS' | 'SAVED'>('SCENES')
     const [localFollowerCount, setLocalFollowerCount] = useState(stats.followerCount)
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
     // Sync local state if stats change (e.g. on manual refresh or server revalidation completion)
     useEffect(() => {
@@ -95,9 +100,9 @@ export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = tru
                     {/* Portrait Section (ID Photo Style) */}
                     <div className="shrink-0 relative group">
                         <div className="w-24 h-32 sm:w-32 sm:h-40 bg-black/50 overflow-hidden border border-white/10 shadow-lg relative rounded-[2px] rotate-[-1deg] group-hover:rotate-0 transition-transform duration-500">
-                            {user.user_metadata?.avatar_url ? (
+                            {user.profile_image_url ? (
                                 <img
-                                    src={user.user_metadata.avatar_url}
+                                    src={user.profile_image_url}
                                     alt={user.email}
                                     className="w-full h-full object-cover filter sepia-[0.2] contrast-120 group-hover:sepia-0 transition-all duration-500"
                                 />
@@ -123,7 +128,7 @@ export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = tru
                                 <div>
                                     <h2 className="text-[10px] font-mono-technical text-gold-film/80 tracking-[0.2em] uppercase mb-1">Director Identity</h2>
                                     <h1 className="text-3xl sm:text-4xl font-display text-celluloid tracking-wide">
-                                        {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                                        {user.nickname}
                                     </h1>
                                 </div>
 
@@ -131,7 +136,10 @@ export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = tru
                                 <div className="flex gap-3 shrink-0">
                                     {isOwnProfile ? (
                                         <>
-                                            <button className="px-5 py-2 bg-white/5 hover:bg-gold-film/10 border border-white/10 hover:border-gold-film/30 text-white/80 hover:text-gold-film text-xs font-mono-technical tracking-widest uppercase transition-all">
+                                            <button
+                                                onClick={() => setIsEditModalOpen(true)}
+                                                className="px-5 py-2 bg-white/5 hover:bg-gold-film/10 border border-white/10 hover:border-gold-film/30 text-white/80 hover:text-gold-film text-xs font-mono-technical tracking-widest uppercase transition-all"
+                                            >
                                                 Edit Identity
                                             </button>
                                             <button
@@ -141,7 +149,10 @@ export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = tru
                                             >
                                                 <LogOut size={16} />
                                             </button>
-                                            <button className="p-2 border border-white/10 hover:border-white/30 text-white/40 hover:text-white transition-colors">
+                                            <button
+                                                onClick={() => setIsSettingsModalOpen(true)}
+                                                className="p-2 border border-white/10 hover:border-gold-film/30 text-white/40 hover:text-gold-film transition-colors"
+                                            >
                                                 <Settings size={16} />
                                             </button>
                                         </>
@@ -157,8 +168,8 @@ export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = tru
                                 </div>
                             </div>
 
-                            <p className="text-sm font-light text-smoke/70 italic max-w-3xl leading-relaxed">
-                                "Documenting the cinematic moments of life. Every memory is a scene waiting to be directed."
+                            <p className="text-sm font-light text-smoke/70 italic max-w-3xl leading-relaxed whitespace-pre-wrap">
+                                "{user.introduction || "Documenting the cinematic moments of life. Every memory is a scene waiting to be directed."}"
                             </p>
                         </div>
 
@@ -184,6 +195,23 @@ export function ProfileClient({ user, stats, buckets, quests, isOwnProfile = tru
                     </div>
                 </div>
             </div>
+
+            <EditIdentityModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                user={{
+                    id: user.id,
+                    nickname: user.nickname,
+                    introduction: user.introduction || '',
+                    profile_image_url: user.profile_image_url
+                }}
+            />
+
+            <SettingsModal
+                isOpen={isSettingsModalOpen}
+                onClose={() => setIsSettingsModalOpen(false)}
+                user={user}
+            />
 
             {/* 2. Navigation Tabs (Lens Switcher) */}
             <div className="sticky top-0 bg-void/90 backdrop-blur-md z-30 mb-8 border-y border-white/5 mx-[-1px]">

@@ -8,6 +8,7 @@ import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { CinematicScriptInput } from '@/components/archive/CinematicScriptInput'
+import { SlateClapper } from '@/components/archive/SlateClapper'
 
 function NewBucketForm() {
   const [tags, setTags] = useState<string[]>([])
@@ -33,7 +34,9 @@ function NewBucketForm() {
         </div>
       )}
 
-      <form action={createBucket} className="space-y-6">
+      <form action={createBucket} className="space-y-6 relative">
+        <SlateClapper />
+
         <div className="space-y-6">
           {/* Cinematic Script Input (Title & Description) */}
           <CinematicScriptInput />

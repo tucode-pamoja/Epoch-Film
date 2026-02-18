@@ -3,13 +3,25 @@ export type Profile = {
   email: string
   nickname: string | null
   profile_image_url: string | null
+  introduction: string | null
   mbti: string | null
   xp: number
   level: number
   daily_tickets: number
   last_ticket_reset_at: string
   last_active_at: string
+  settings: {
+    notifications: {
+      email: boolean
+      push: boolean
+    }
+    privacy: {
+      public_profile: boolean
+    }
+    theme: 'dark' | 'light' | 'cinematic'
+  } | null
   created_at: string
+  updated_at: string
 }
 
 export type BucketStatus = 'DRAFT' | 'ACTIVE' | 'ACHIEVED'
@@ -53,13 +65,14 @@ export interface Bucket {
   } | null
 }
 
+export type CastRole = 'CO_DIRECTOR' | 'ACTOR' | 'GUEST'
 export type CastStatus = 'pending' | 'accepted' | 'rejected' | 'changes_requested'
 
 export interface BucketCast {
   id: string
   bucket_id: string
   user_id: string
-  role: string | null
+  role: CastRole | null
   is_accepted: boolean
   status: CastStatus
   message: string | null

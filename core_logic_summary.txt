@@ -209,21 +209,33 @@ export const config = {
 ---
 ## 7. Business Rules (Grand Chancellor's Decree)
 
-### 7.1 Tickets & Interaction
-- **Daily Tickets**: Users receive 5 tickets daily (Reset at 00:00 UTC).
-- **Issuing Tickets**:
-  - Costs 1 Daily Ticket.
-  - Reward (Issuer): +5 XP.
-  - Reward (Owner): +20 XP.
+### 7.1 Tickets & Interaction (Updated: Unlimited Likes)
+- **Concept**: Tickets function as "Likes" or "Admit One" stamps. No daily limit.
+- **Issuing Tickets (`issue_bucket_ticket` RPC)**:
+  - Cost: Free (Unlimited).
+  - Reward (Issuer): +5 XP (Appreciating art).
+  - Reward (Owner): +20 XP (creating value).
+  - Notification: Created in `notifications` table for the owner.
 - **Comments**:
   - Cost: Free.
-  - Reward (Commenter): +10 XP (Limit 5/day).
+  - Reward (Commenter): +10 XP.
   - Reward (Owner): +2 XP.
 
 ### 7.2 AI Roadmap
-- **Accessibility**: Currently free.
+- **Accessibility**: Currently free (Groq/Gemini).
 - **Goal**: Encourage users to use AI for better planning.
 
 ### 7.3 Leveling System
 - **Level Formula**: `Math.floor(totalXp / 500) + 1`
 - **Next Level**: `(Level) * 500`
+
+### 7.4 Casting Roles & Permissions (Role-Based RLS)
+- **CO_DIRECTOR**:
+  - Can Edit Bucket Details (Title, Desc, etc).
+  - Can Add/Edit/Delete Any Memory within the bucket.
+  - Can Manage Cast (Invite others if implemented).
+- **ACTOR**:
+  - Can Add Memories.
+  - Can Edit/Delete Only Their Own Memories.
+- **GUEST**:
+  - View Only (Standard public access).

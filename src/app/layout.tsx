@@ -33,13 +33,30 @@ export default async function RootLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  let theme = 'cinematic';
+  if (user) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('settings')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.settings?.theme) {
+      theme = profile.settings.theme;
+    }
+  }
+
   return (
-    <html lang="ko">
+    <html lang="ko" data-theme={theme}>
       <body className="antialiased pb-24">
-        <div className="film-grain" />
-        <div className="vintage-overlay" />
-        <div className="light-leak" />
-        <div className="vignette" />
+        {theme === 'cinematic' && (
+          <>
+            <div className="film-grain" />
+            <div className="vintage-overlay" />
+            <div className="light-leak" />
+            <div className="vignette" />
+          </>
+        )}
         <div className="dust-layer">
           <div className="dust-particle w-0.5 h-0.5" style={{ top: '20%', left: '30%', animationDuration: '12s' }} />
           <div className="dust-particle w-1 h-1" style={{ top: '60%', left: '10%', animationDuration: '18s' }} />

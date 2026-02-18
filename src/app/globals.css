@@ -48,6 +48,38 @@
   --background: var(--color-void);
   --foreground: var(--color-celluloid);
   --primary: var(--color-gold-film);
+  --background-elevated: var(--color-darkroom);
+}
+
+[data-theme='cinematic'] {
+  --background: #0A0908;
+  --foreground: #F7F2E9;
+  --primary: #C9A227;
+  --background-elevated: #141210;
+}
+
+[data-theme='dark'] {
+  --background: #000000;
+  --foreground: #e5e5e5;
+  --primary: #c9a227;
+  --background-elevated: #0f0f0f;
+
+  /* Overwrite semantic palette */
+  --color-void: #000000;
+  --color-darkroom: #0f0f0f;
+}
+
+[data-theme='light'] {
+  --background: #fdfaf5;
+  --foreground: #1c1a18;
+  --primary: #b08d1e;
+  --background-elevated: #f5f0e6;
+
+  /* Overwrite semantic palette */
+  --color-void: #fdfaf5;
+  --color-darkroom: #f5f0e6;
+  --color-celluloid: #1c1a18;
+  --color-smoke: #8a817c;
 }
 
 body {
