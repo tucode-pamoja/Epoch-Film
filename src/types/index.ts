@@ -19,7 +19,18 @@ export type Profile = {
       public_profile: boolean
     }
     theme: 'dark' | 'light' | 'cinematic'
+    push_token?: string | null // Current active push token
   } | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PushToken {
+  id: string
+  user_id: string
+  token: string
+  device_name: string | null
+  platform: 'ios' | 'android' | 'web'
   created_at: string
   updated_at: string
 }

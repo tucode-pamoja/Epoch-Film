@@ -50,6 +50,3 @@ get-final-ids.ts
 get-ids.ts
 test_duplicates.ts
 migration_runner.sh
-
-# Work plans (local only)
-work-plan/

@@ -4,7 +4,8 @@ EPOCH Film은 **"인생을 영화처럼 기록한다"**는 철학을 바탕으�
 • Framework: Next.js 14+ (App Router)
 • Database & Auth: Supabase (PostgreSQL, Auth, Storage)
 • Styling: Tailwind CSS (Cinematic Dark Mode)
-• Key Logic: Server Actions를 통한 직접적인 데이터 변이, AI 기반 로드맵 생성, 이미지 메타데이터(EXIF) 기반 추억 아카이빙.
+• Architecture: 비즈니스 로직은 `src/services` 계층으로 통합 관리 (Web Actions & Mobile API 공용).
+• Key Logic: AI 기반 로드맵 생성, 이미지 메타데이터(EXIF) 기반 추억 아카이빙, 실시간 푸시 알림.
 
 --------------------------------------------------------------------------------
 2. 작업 로드맵 (Task Roadmap)
@@ -21,10 +22,25 @@ EPOCH Film은 **"인생을 영화처럼 기록한다"**는 철학을 바탕으�
 • [x] 리메이크(Remake) 및 캐스팅(Casting Call) 시스템.
 
 🚧 Phase 2: 고도화 및 사용자 경험 정제 (Current Tasks)
-• [Frontend Master] 상세 페이지 내 시네마틱 드래프팅 경험 고도화 (스크린플레이 입력, 슬레이트 애니메이션).
+• [x] [Backend Wizard] 비즈니스 로직 중앙화: Server Actions에서 `src/services` 계층으로 핵심 로직 이관 완료.
 • [x] [Backend Wizard] 협업 제작(Casting) 수락 시 공동 편집 권한 로직 정교화 (Role-based RLS & Server Actions 적용 완료).
+• [Frontend Master] 상세 페이지 내 시네마틱 드래프팅 경험 고도화 (스크린플레이 입력, 슬레이트 애니메이션).
 • [Visual Master] 타임라인 내 루틴 수행 기록(Footprint) 시각화 도구 설계.
 • [Technical Inspector] 대규모 데이터 로딩 시의 성능 최적화 및 엣지 케이스 테스트.
+
+✅ Phase 3: 모바일 확장 (Mobile Expansion - In Progress)
+• [x] [Grand Chancellor] [모바일 이주 계획서](work-plan/mobile-migration.md) 및 [에이전트별 구현 지침](work-plan/mobile-instructions.md) 수립 완료.
+• [x] [Backend Wizard] 서비스 계층(`src/services`) 구축을 통한 웹/모바일 로직 공유 기반 마련.
+• [x] [Backend Wizard] Supabase Edge Functions (`send-push`) 및 푸시 토큰 관리 스키마 구축 완료.
+• [Frontend Master] React Native (Expo) 기반의 크로스 플랫폼 앱 아키텍처 설계 및 모바일 전용 클라이언트 설정.
+• [Visual Master] 모바일 전용 시네마틱 제스처 및 인터랙션 가이드 제작.
+
+⚠️ 품질 및 보안 주의 사항 (Stability & Security)
+• [Performance] 복합 오버레이(Canvas/Blur)로 인한 저사양 기기 프레임 드랍 주의.
+• [Data Integrity] 오프라인 기록 유실 방지를 위한 로컬 동기화(Sync) 로직 필수.
+• [Security] 모바일 환경 변수 노출 방지를 위해 `EXPO_PUBLIC_` 접두사 엄격 사용.
+
+
 
 
 --------------------------------------------------------------------------------

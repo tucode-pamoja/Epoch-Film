@@ -6,45 +6,23 @@ import { revalidatePath } from 'next/cache'
 import sharp from 'sharp'
 import convert from 'heic-convert'
 
+import { getBucketService, createBucketService, deleteBucketService } from '@/services/bucket-service'
+
 export async function getBucket(id: string) {
-  console.log('[getBucket] Fetching bucket with id:', id)
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('buckets')
-    .select(`
-      *, 
-      users!user_id(nickname, profile_image_url), 
-      original_bucket:buckets!original_bucket_id(id, title, user_id, users!user_id(nickname, profile_image_url))
-    `)
-    .eq('id', id)
-    .single()
-
-  if (error) {
-    // If no row found, return null silently
-    if (error.code === 'PGRST116') return null
-
-    console.error('Error fetching bucket:', error.message, error.details, error.hint)
-    return null
-  }
-
-  // Fetch remake count
-  const { count: remakeCount } = await supabase
-    .from('buckets')
-    .select('*', { count: 'exact', head: true })
-    .eq('original_bucket_id', id)
-
-  return { ...data, remake_count: remakeCount || 0 }
+  return getBucketService(supabase, id)
 }
 
 export async function createBucket(formData: FormData) {
-  console.log('[CREATE_BUCKET_ACTION] Received form data:',
-    Object.fromEntries(formData.entries())
-  )
   const title = formData.get('title') as string
   const category = formData.get('category') as string
   const description = formData.get('description') as string
   const importance = formData.get('importance') as string
   const tagsJson = formData.get('tags') as string
+  const sceneType = formData.get('sceneType') as string
+  const routineFrequency = formData.get('routineFrequency') as string
+  const routineDaysRaw = formData.getAll('routineDays')
+  const routineDays = routineDaysRaw.map(day => parseInt(day as string))
 
   let tags: string[] = []
   try {
@@ -53,52 +31,35 @@ export async function createBucket(formData: FormData) {
     console.error('Failed to parse tags', e)
   }
 
-  const sceneType = formData.get('sceneType') as string
   const targetDate = sceneType === 'YEARLY' ? new Date(`${new Date().getFullYear()}-12-31`).toISOString() : null
-
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  if (!title || !category) redirect('/archive/new?error=제목과 카테고리를 입력해주세요.')
 
-  if (!user) {
-    redirect('/login')
-  }
+  try {
+    await createBucketService(supabase, user.id, {
+      title,
+      category,
+      importance: parseInt(importance || '3'),
+      description,
+      tags,
+      is_public: true,
+      target_date: targetDate,
+      is_routine: sceneType === 'ROUTINE',
+      routine_frequency: sceneType === 'ROUTINE' ? routineFrequency : null,
+      routine_days: sceneType === 'ROUTINE' && routineFrequency === 'WEEKLY' ? routineDays : null,
+    })
 
-  if (!title || !category) {
-    redirect('/archive/new?error=제목과 카테고리를 입력해주세요.')
-  }
-
-  const routineFrequency = formData.get('routineFrequency') as string
-  const routineDaysRaw = formData.getAll('routineDays')
-  const routineDays = routineDaysRaw.map(day => parseInt(day as string))
-
-  const { error } = await supabase.from('buckets').insert({
-    user_id: user.id,
-    title,
-    category,
-    importance: parseInt(importance || '3'),
-    description,
-    tags, // Add tags here
-    is_public: true, // Default to public for now or add to form
-    is_pinned: false,
-    target_date: targetDate, // Set target_date based on type
-    is_routine: sceneType === 'ROUTINE',
-    routine_frequency: sceneType === 'ROUTINE' ? routineFrequency : null,
-    routine_days: sceneType === 'ROUTINE' && routineFrequency === 'WEEKLY' ? routineDays : null,
-  })
-
-  if (error) {
+    revalidatePath('/')
+    await updateQuestProgress('CREATE_BUCKET')
+    const redirectTab = sceneType === 'ROUTINE' ? 'ROUTINES' : sceneType === 'YEARLY' ? 'YEAR' : 'LIFE'
+    redirect(`/?tab=${redirectTab}`)
+  } catch (error: any) {
     console.error('Error creating bucket:', error)
     redirect(`/archive/new?error=${encodeURIComponent(error.message)}`)
   }
-
-  revalidatePath('/')
-  await updateQuestProgress('CREATE_BUCKET')
-
-  const redirectTab = sceneType === 'ROUTINE' ? 'ROUTINES' : sceneType === 'YEARLY' ? 'YEAR' : 'LIFE'
-  redirect(`/?tab=${redirectTab}`)
 }
 
 export async function deleteBucket(id: string) {
@@ -106,80 +67,25 @@ export async function deleteBucket(id: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
-  // Verify ownership before delete
-  const { data: bucket, error: fetchError } = await supabase
-    .from('buckets')
-    .select('user_id')
-    .eq('id', id)
-    .single()
-
-  if (fetchError || !bucket) throw new Error('Scene not found')
-  if (bucket.user_id !== user.id) throw new Error('Forbidden')
-
-  const { error: deleteError } = await supabase
-    .from('buckets')
-    .delete()
-    .eq('id', id)
-
-  if (deleteError) {
-    console.error('Delete error:', deleteError)
-    throw new Error('Failed to scrap production')
+  try {
+    await deleteBucketService(supabase, user.id, id)
+    revalidatePath('/')
+    revalidatePath('/archive')
+    revalidatePath('/explore')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Delete error:', error)
+    throw new Error(error.message || 'Failed to scrap production')
   }
-
-  revalidatePath('/')
-  revalidatePath('/archive')
-  revalidatePath('/explore')
-
-  return { success: true }
 }
+
+import { saveMemoryService } from '@/services/memory-service'
 
 export async function saveMemory(bucketId: string, formData: FormData) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  console.log(`[SAVE_MEMORY_START] Bucket ID: ${bucketId}`);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { success: false, error: '로그인이 필요합니다.', code: 'UNAUTHORIZED' }
-  }
-
-  // Authority Check: Owner or Accepted Cast Member
-  const { data: bucket, error: authError } = await supabase
-    .from('buckets')
-    .select('user_id')
-    .eq('id', bucketId)
-    .single()
-
-  if (authError || !bucket) {
-    return { success: false, error: '시나리오를 찾을 수 없습니다.', code: 'NOT_FOUND' }
-  }
-
-  const isOwner = bucket.user_id === user.id
-  let hasWritePermission = isOwner
-
-  if (!isOwner) {
-    // Check if user is an accepted cast member with appropriate role
-    const { data: castMember } = await supabase
-      .from('bucket_casts')
-      .select('role, is_accepted')
-      .eq('bucket_id', bucketId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (castMember?.is_accepted) {
-      // CO_DIRECTOR and ACTOR can both add memories
-      if (castMember.role === 'CO_DIRECTOR' || castMember.role === 'ACTOR') {
-        hasWritePermission = true
-      }
-    }
-  }
-
-  if (!hasWritePermission) {
-    return { success: false, error: '이 시나리오에 기록을 추가할 권한이 없습니다.', code: 'FORBIDDEN' }
-  }
+  if (!user) return { success: false, error: '로그인이 필요합니다.', code: 'UNAUTHORIZED' }
 
   const caption = formData.get('caption') as string
   const imageFile = formData.get('image') as File | null
@@ -187,166 +93,34 @@ export async function saveMemory(bucketId: string, formData: FormData) {
   const locationLng = formData.get('location_lng') as string
   const capturedAt = formData.get('captured_at') as string
 
-  let imageUrl: string | null = null
-  const currentBucketId = bucketId
-
-  // Handle Image Upload if present
+  let imageBuffer: Buffer | undefined
   if (imageFile && imageFile.size > 0) {
-    // Check file size (max 50MB for processing)
-    if (imageFile.size > 50 * 1024 * 1024) {
-      return { success: false, error: '파일 용량이 너무 큽니다. (최대 50MB)', code: 'FILE_TOO_LARGE' }
-    }
-
-    const fileExt = imageFile.name.split('.').pop()
-    let fileName = `${user.id}/${currentBucketId}-${Date.now()}` // Extension will be .webp
-
-    // Convert File to Buffer
     const arrayBuffer = await imageFile.arrayBuffer()
-    let buffer = Buffer.from(arrayBuffer)
-    let contentType = imageFile.type
-
-    // Server-side image processing with sharp & heic-convert
-    try {
-      const isHeic = fileExt?.toLowerCase() === 'heic' ||
-        fileExt?.toLowerCase() === 'heif' ||
-        contentType === 'image/heic' ||
-        contentType === 'image/heif' ||
-        contentType === 'application/octet-stream';
-
-      if (isHeic) {
-        try {
-          console.log(`[IMAGE_PROCESS] Attempting HEIC conversion for user: ${user.id}, size: ${imageFile.size}`);
-          const outputBuffer = await convert({
-            buffer: buffer as any,
-            format: 'JPEG',
-            quality: 1
-          });
-          buffer = Buffer.from(outputBuffer as any);
-        } catch (heicError: any) {
-          console.error('[HEIC_CONVERSION_FAILED] Error converting HEIC to JPEG. Falling back to sharp directly.', {
-            error: heicError.message,
-            userId: user.id,
-            fileName: imageFile.name
-          });
-        }
-      }
-
-      // Optimize/Process with sharp: WebP conversion & Resizing
-      // Using { failOn: 'none' } and ensuring we only take the first page to avoid "Failed to add frame"
-      const sharpImage = sharp(buffer, { failOn: 'none', page: 0 })
-      sharpImage.rotate()
-      sharpImage.flatten({ background: { r: 28, g: 26, b: 24 } })
-
-      sharpImage.resize(1600, null, {
-        withoutEnlargement: true,
-        fit: 'inside'
-      })
-
-      // Convert to WebP
-      const processed = await sharpImage.webp({
-        quality: 85,
-        effort: 6,
-        smartSubsample: true
-      }).toBuffer()
-
-      buffer = Buffer.from(processed as any)
-      contentType = 'image/webp'
-      fileName = `${fileName}.webp`
-
-    } catch (imageError: any) {
-      console.error('[IMAGE_PROCESSING_CRITICAL] Image pipeline failed:', {
-        error: imageError.message,
-        userId: user.id
-      });
-      // Fallback: we'll try to upload original buffer, hoping storage allows it
-    }
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('memories')
-      .upload(fileName, buffer, {
-        contentType: contentType,
-        upsert: true
-      })
-
-    if (uploadError) {
-      console.error('SERVER_UPLOAD_FAILURE:', {
-        details: uploadError,
-        userId: user.id,
-        fileName
-      })
-      return { success: false, error: '파일 업로드에 실패했습니다.', code: 'STORAGE_UPLOAD_ERROR' }
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('memories')
-      .getPublicUrl(uploadData.path)
-    imageUrl = publicUrl
+    imageBuffer = Buffer.from(arrayBuffer)
   }
 
-  // Final check: if an image was provided but we have no URL, something went wrong
-  if (imageFile && imageFile.size > 0 && !imageUrl) {
-    return { success: false, error: '이미지 주소 생성에 실패했습니다.', code: 'URL_GENERATION_FAILED' }
-  }
-
-  console.log(`[DB_INSERT_START] Saving memory to bucket: ${currentBucketId}, user: ${user.id}`);
-
-  // Parse location values safely, ensuring NaN never reaches the DB
-  const parsedLat = locationLat ? parseFloat(locationLat) : null
-  const parsedLng = locationLng ? parseFloat(locationLng) : null
-  const safeLat = parsedLat !== null && !Number.isNaN(parsedLat) ? parsedLat : null
-  const safeLng = parsedLng !== null && !Number.isNaN(parsedLng) ? parsedLng : null
-
-  const { error } = await supabase.from('memories').insert({
-    bucket_id: currentBucketId,
-    user_id: user.id,
-    media_url: imageUrl,
-    caption: caption || '새로운 기록이 추가되었습니다.',
-    location_lat: safeLat,
-    location_lng: safeLng,
-    captured_at: capturedAt || null,
-  })
-
-  if (error) {
-    console.error('Error saving memory to DB:', {
-      error: error.message,
-      details: error.details,
-      code: error.code,
+  try {
+    await saveMemoryService(supabase, {
+      bucketId,
       userId: user.id,
-      bucketId: currentBucketId
+      caption,
+      imageBuffer,
+      imageType: imageFile?.type,
+      fileName: imageFile?.name,
+      locationLat: locationLat ? parseFloat(locationLat) : null,
+      locationLng: locationLng ? parseFloat(locationLng) : null,
+      capturedAt: capturedAt || null,
     })
-    return {
-      success: false,
-      error: '메모리 저장 중 서버 오류가 발생했습니다. (DB Insert 실패)',
-      code: 'DATABASE_INSERT_ERROR',
-      details: error.message
-    }
+
+    revalidatePath(`/archive/${bucketId}`)
+    revalidatePath('/')
+    revalidatePath('/timeline')
+    await updateQuestProgress('ADD_MEMORY')
+    return { success: true }
+  } catch (error: any) {
+    console.error('Save memory error:', error)
+    return { success: false, error: error.message || '저장에 실패했습니다.', code: 'SAVE_ERROR' }
   }
-
-  // Auto-set thumbnail if it's the first memory (or if thumbnail is missing)
-  if (imageUrl) {
-    const { data: bucketData } = await supabase
-      .from('buckets')
-      .select('thumbnail_url')
-      .eq('id', currentBucketId)
-      .single()
-
-    if (bucketData && !bucketData.thumbnail_url) {
-      console.log(`[AUTO_THUMBNAIL] Setting initial thumbnail for bucket ${currentBucketId}`)
-      await supabase
-        .from('buckets')
-        .update({ thumbnail_url: imageUrl })
-        .eq('id', currentBucketId)
-    }
-  }
-
-  // Revalidate ALL relevant paths for immediate consistency
-  revalidatePath(`/archive/${currentBucketId}`)
-  revalidatePath('/')
-  revalidatePath('/timeline')
-  revalidatePath('/')
-
-  await updateQuestProgress('ADD_MEMORY')
-  return { success: true }
 }
 
 export async function createLetter(formData: FormData) {
