@@ -51,10 +51,11 @@
 ### 🖐️ 시네마틱 제스처 & 햅틱 (Haptics)
 | 제스처 | 동작 | 햅틱 피드백 |
 | :--- | :--- | :--- |
-| **Horizontal Swipe** | 타임라인 이동 | 필름 릴 소생 (Selection Haptic 반복) |
+| **Horizontal Swipe** | 타임라인 이동 | **Reel Click** (selectionAsync - 매 노드 통과 시) |
 | **Long Press** | EXIF/HUD 노출 | 정보 인쇄 (Impact Medium) |
 | **Pull to Develop** | 새로고침 | 암실 인화 연출 (Success Haptic) |
 | **Double Tap** | 티켓 발행 | 기계식 스탬프 (Impact Heavy) |
+| **New Entry** | 기록 추가 완료 | **Slate Snap** (Impact Heavy - CinematicSlate 동작 시) |
 
 ---
 

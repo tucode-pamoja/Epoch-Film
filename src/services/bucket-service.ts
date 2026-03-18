@@ -100,3 +100,43 @@ export async function togglePinService(supabase: SupabaseClient, bucketId: strin
     if (error) throw error
     return data
 }
+
+export async function listBucketsService(
+    supabase: SupabaseClient,
+    userId: string,
+    options: {
+        category?: string;
+        isPinned?: boolean;
+        limit?: number;
+        offset?: number;
+    } = {}
+) {
+    let query = supabase
+        .from('buckets')
+        .select(`
+            *,
+            users!user_id(nickname, profile_image_url)
+        `)
+        .eq('user_id', userId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+
+    if (options.category) {
+        query = query.eq('category', options.category)
+    }
+
+    if (options.isPinned !== undefined) {
+        query = query.eq('is_pinned', options.isPinned)
+    }
+
+    if (options.limit) {
+        const from = options.offset || 0
+        const to = from + options.limit - 1
+        query = query.range(from, to)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+    return data
+}

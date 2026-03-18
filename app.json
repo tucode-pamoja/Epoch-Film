@@ -1,0 +1,51 @@
+{
+    "expo": {
+        "name": "Epoch-Film",
+        "slug": "epoch-film",
+        "version": "1.0.0",
+        "scheme": "epoch-film",
+        "orientation": "portrait",
+        "icon": "./public/logo.jpg",
+        "userInterfaceStyle": "dark",
+        "splash": {
+            "image": "./public/logo.jpg",
+            "resizeMode": "contain",
+            "backgroundColor": "#0A0908"
+        },
+        "assetBundlePatterns": [
+            "**/*"
+        ],
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.epochfilm.app"
+        },
+        "android": {
+            "adaptiveIcon": {
+                "foregroundImage": "./public/logo.jpg",
+                "backgroundColor": "#0A0908"
+            },
+            "package": "com.epochfilm.app"
+        },
+        "web": {
+            "favicon": "./public/favicon.ico"
+        },
+        "plugins": [
+            [
+                "expo-router",
+                {
+                    "root": "./app"
+                }
+            ],
+            "expo-secure-store"
+        ],
+        "extra": {
+            "router": {
+                "origin": false,
+                "head": "mobile/app"
+            },
+            "eas": {
+                "projectId": "your-project-id"
+            }
+        }
+    }
+}

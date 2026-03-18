@@ -239,3 +239,30 @@ export const config = {
   - Can Edit/Delete Only Their Own Memories.
 - **GUEST**:
   - View Only (Standard public access).
+
+---
+## 8. Mobile Expansion & Cinematic Interaction (Decree 8.0)
+
+### 8.1 Architecture (Expo + Shared Services)
+- **Framework**: React Native (Expo SDK 54+) with Expo Router.
+- **Data Layer**: Shared backend logic in `src/services`, consumed via Mobile API routes (`src/app/api/mobile/*`) or direct Supabase client.
+- **Offline Strategy**:
+  - React Query for state management.
+  - `AsyncStorage` + `persistQueryClient` for 7-day offline persistence.
+
+### 8.2 Push Notifications & Deep Linking
+- **Schema**: `epoch-film://` for deep linking.
+- **Triggers**: Supabase Database Webhooks on `bucket_casts` and `quests`.
+- **Edge Function**: `send-push` handles Expo Push API dispatch.
+- **Navigation**: Deep links target `/archive/[id]` for direct scene access from notifications.
+
+### 8.3 Cinematic Interaction Guidelines
+- **Haptics**:
+  - `SelectionFeedback`: Horizontal scroll/Selection (Timeline Selection).
+  - `HeavyImpact`: Action completion (Slate Snap).
+- **Visuals**:
+  - **OLED optimization**: Backgrounds MUST be True Black (`#000000`) for maximum contrast.
+  - **Cinematic Slate**: Use `CinematicSlate.tsx` for all data submission transitions.
+- **Performance Tiering**:
+  - Use `usePerformanceMonitor` to detect device capabilities.
+  - **LOW Tier**: Disable intensive blur, reduce animation complexity, hide low-priority media.
