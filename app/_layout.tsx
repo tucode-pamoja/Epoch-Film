@@ -9,6 +9,9 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { MotiView, AnimatePresence } from 'moti';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
+import { supabase } from '@/utils/supabase/mobile';
+
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -20,6 +23,7 @@ Notifications.setNotificationHandler({
         shouldShowList: true,
     }),
 });
+
 
 SplashScreen.preventAutoHideAsync();
 
@@ -53,55 +57,72 @@ export default function RootLayout() {
         return () => subscription.remove();
     }, []);
 
+    const [session, setSession] = useState<any>(null);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
     return (
         <QueryClientProvider client={queryClient}>
-            <View style={{ flex: 1, backgroundColor: '#000000' }}>
-                <StatusBar style="light" />
+            <SafeAreaProvider>
+                <View style={{ flex: 1, backgroundColor: '#000000' }}>
+                    <StatusBar style="light" />
 
-                <AnimatePresence>
-                    {!isReady && (
-                        <MotiView
-                            key="splash"
-                            from={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 1500, type: 'timing' }}
-                            style={[StyleSheet.absoluteFill, { backgroundColor: '#000', zIndex: 1000, justifyContent: 'center', alignItems: 'center' }]}
-                        >
+                    <AnimatePresence>
+                        {!isReady && (
                             <MotiView
-                                from={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                transition={{ duration: 1000, type: 'timing' }}
-                                style={{ alignItems: 'center' }}
+                                key="splash"
+                                from={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 1500, type: 'timing' }}
+                                style={[StyleSheet.absoluteFill, { backgroundColor: '#000', zIndex: 1000, justifyContent: 'center', alignItems: 'center' }]}
                             >
-                                <Text style={{ color: '#C9A227', fontFamily: 'Gowun Batang', fontSize: 32, letterSpacing: 8 }}>EPOCH FILM</Text>
-                                <Text style={{ color: '#C9A22733', fontFamily: 'JetBrains Mono', fontSize: 10, letterSpacing: 4, marginTop: 16 }}>THEATER OPENING...</Text>
+                                <MotiView
+                                    from={{ scale: 0.9, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 1000, type: 'timing' }}
+                                    style={{ alignItems: 'center' }}
+                                >
+                                    <Text style={{ color: '#C9A227', fontFamily: 'Gowun Batang', fontSize: 32, letterSpacing: 8 }}>EPOCH FILM</Text>
+                                    <Text style={{ color: '#C9A22733', fontFamily: 'JetBrains Mono', fontSize: 10, letterSpacing: 4, marginTop: 16 }}>THEATER OPENING...</Text>
+                                </MotiView>
                             </MotiView>
-                        </MotiView>
-                    )}
-                </AnimatePresence>
+                        )}
+                    </AnimatePresence>
 
-                <Stack
-                    screenOptions={{
-                        headerStyle: {
-                            backgroundColor: '#141210',
-                        },
-                        headerTintColor: '#C9A227',
-                        headerTitleStyle: {
-                            fontFamily: 'Gowun Batang',
-                        },
-                        contentStyle: {
-                            backgroundColor: '#000000',
-                        },
-                    }}
-                >
-                    <Stack.Screen name="archive/index" options={{ title: 'ARCHIVE', headerShown: false }} />
-                    <Stack.Screen name="archive/[id]/index" options={{ title: 'SCENE', headerShown: true }} />
-                    <Stack.Screen name="archive/[id]/add" options={{ title: 'NEW', presentation: 'modal' }} />
-                    <Stack.Screen name="profile/index" options={{ title: 'DIRECTOR', headerShown: false }} />
-                    <Stack.Screen name="explore/index" options={{ title: 'EXPLORE', headerShown: false }} />
-                </Stack>
-                <MobileBottomNav />
-            </View>
+                    <Stack
+                        screenOptions={{
+                            headerStyle: {
+                                backgroundColor: '#141210',
+                            },
+                            headerTintColor: '#C9A227',
+                            headerTitleStyle: {
+                                fontFamily: 'Gowun Batang',
+                            },
+                            contentStyle: {
+                                backgroundColor: '#000000',
+                            },
+                        }}
+                    >
+                        <Stack.Screen name="login" options={{ title: 'AUTHENTICATION', headerShown: false }} />
+                        <Stack.Screen name="archive/index" options={{ title: 'ARCHIVE', headerShown: false }} />
+                        <Stack.Screen name="archive/[id]/index" options={{ title: 'SCENE', headerShown: true }} />
+                        <Stack.Screen name="archive/[id]/add" options={{ title: 'NEW', presentation: 'modal' }} />
+                        <Stack.Screen name="profile/index" options={{ title: 'DIRECTOR', headerShown: false }} />
+                        <Stack.Screen name="explore/index" options={{ title: 'EXPLORE', headerShown: false }} />
+                    </Stack>
+                    {session && <MobileBottomNav />}
+                </View>
+            </SafeAreaProvider>
         </QueryClientProvider>
     );
 }

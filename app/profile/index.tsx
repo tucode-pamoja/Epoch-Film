@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { Stack } from 'expo-router';
-import { Telescope, Film, Users, Award, Ticket } from 'lucide-react-native';
+import { Telescope, Film, Users, Award, Ticket, LogOut } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase/mobile';
-import { Profile, UserStats } from '@/types';
-import { clsx } from 'clsx';
+import { Profile, UserStats, Bucket } from '@/types';
+import { useRouter } from 'expo-router';
 
 export default function ProfileScreen() {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [stats, setStats] = useState<UserStats | null>(null);
+    const [userBuckets, setUserBuckets] = useState<Bucket[]>([]);
+    const router = useRouter();
 
     useEffect(() => {
         fetchProfile();
+        fetchUserBuckets();
     }, []);
 
     async function fetchProfile() {
@@ -26,7 +29,6 @@ export default function ProfileScreen() {
 
         if (profileData) {
             setProfile(profileData);
-            // Mock stats for now
             setStats({
                 level: profileData.level || 1,
                 xp: profileData.xp || 0,
@@ -34,15 +36,42 @@ export default function ProfileScreen() {
                 streak: 5,
                 completedDreams: 12,
                 activeDreams: 3,
-                followerCount: 128,
-                followingCount: 84
+                followerCount: 0,
+                followingCount: 0
             });
         }
     }
 
+    async function fetchUserBuckets() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data } = await supabase
+            .from('buckets')
+            .select('*')
+            .eq('user_id', user.id)
+            .limit(3);
+        
+        if (data) setUserBuckets(data as Bucket[]);
+    }
+
+    const handleSignOut = async () => {
+        await supabase.auth.signOut();
+        router.replace('/login');
+    };
+
+
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-            <Stack.Screen options={{ title: 'DIRECTOR PROFILE', headerShown: true }} />
+            <Stack.Screen options={{ 
+                title: 'DIRECTOR PROFILE', 
+                headerShown: true,
+                headerRight: () => (
+                    <TouchableOpacity onPress={handleSignOut} style={{ marginRight: 16 }}>
+                        <LogOut color="#C9A227" size={20} />
+                    </TouchableOpacity>
+                )
+            }} />
 
             {/* Profile Header */}
             <View style={styles.header}>
@@ -91,11 +120,25 @@ export default function ProfileScreen() {
                     <Film color="#C9A227" size={18} />
                     <Text style={styles.sectionTitle}>FILMOGRAPHY</Text>
                 </View>
-                <View style={styles.emptyState}>
-                    <Telescope color="#C9A22733" size={48} />
-                    <Text style={styles.emptyText}>아직 개봉된 필름이 없습니다.</Text>
-                </View>
+                {userBuckets.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Telescope color="#C9A22733" size={48} />
+                        <Text style={styles.emptyText}>아직 개봉된 필름이 없습니다.</Text>
+                    </View>
+                ) : (
+                    userBuckets.map(bucket => (
+                        <TouchableOpacity 
+                            key={bucket.id} 
+                            style={styles.filmItem}
+                            onPress={() => router.push(`/archive/${bucket.id}`)}
+                        >
+                            <Text style={styles.filmTitle}>{bucket.title}</Text>
+                            <Text style={styles.filmMeta}>{bucket.category} • {bucket.status}</Text>
+                        </TouchableOpacity>
+                    ))
+                )}
             </View>
+
         </ScrollView>
     );
 }
@@ -222,5 +265,26 @@ const styles = StyleSheet.create({
         fontFamily: 'Pretendard',
         fontSize: 12,
         marginTop: 16,
+    },
+    filmItem: {
+        backgroundColor: '#141210',
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#C9A2271A',
+        marginBottom: 12,
+    },
+    filmTitle: {
+        color: '#F7F2E9',
+        fontFamily: 'Gowun Batang',
+        fontSize: 16,
+        marginBottom: 4,
+    },
+    filmMeta: {
+        color: '#C9A22766',
+        fontFamily: 'JetBrains Mono',
+        fontSize: 10,
+        letterSpacing: 2,
     }
 });
+
