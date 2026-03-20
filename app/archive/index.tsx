@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { MobileCinematicTimeline } from '@/components/buckets/MobileCinematicTimeline';
 import { supabase } from '@/utils/supabase/mobile';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StyleSheet } from 'react-native';
 
 export default function ArchiveScreen() {
     const [buckets, setBuckets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
     useEffect(() => {
         fetchBuckets();
@@ -35,15 +38,29 @@ export default function ArchiveScreen() {
     }
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#0A0908' }}>
-            <Stack.Screen options={{ title: 'ARCHIVE', headerShown: true }} />
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+            <Stack.Screen options={{ 
+                title: 'ARCHIVE', 
+                headerShown: true,
+                headerTransparent: true,
+                headerStyle: { backgroundColor: 'transparent' },
+                headerTintColor: '#C9A227',
+                headerTitleStyle: { fontFamily: 'JetBrains Mono', fontSize: 13 },
+                headerBackground: () => (
+                    <LinearGradient colors={['rgba(0,0,0,0.9)', 'transparent']} style={StyleSheet.absoluteFill} />
+                )
+            }} />
             {loading ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator color="#C9A227" />
                 </View>
             ) : (
-                <MobileCinematicTimeline buckets={buckets} />
+                <MobileCinematicTimeline 
+                    buckets={buckets} 
+                    onBucketPress={(id) => router.push(`/archive/${id}`)}
+                />
             )}
+
         </View>
     );
 }

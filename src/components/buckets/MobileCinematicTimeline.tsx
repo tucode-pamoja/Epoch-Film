@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Dimensions, StyleSheet, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView, AnimatePresence } from 'moti';
 import { Star } from 'lucide-react-native';
 import { Bucket } from '@/types';
@@ -22,6 +23,8 @@ export function MobileCinematicTimeline({ buckets, onBucketPress }: MobileCinema
     const [activeId, setActiveId] = useState<string | null>(null);
     const scrollRef = useRef<ScrollView>(null);
     const lastTriggeredIndex = useRef<number>(-1);
+    const hasInitialized = useRef(false);
+    const insets = useSafeAreaInsets();
 
     const categories = ['ALL', 'TRAVEL', 'GROWTH', 'CAREER', 'LOVE', 'HEALTH', 'CULTURE', 'FOOD', 'OTHER'];
 
@@ -76,6 +79,13 @@ export function MobileCinematicTimeline({ buckets, onBucketPress }: MobileCinema
         }));
     }, [baseFilteredBuckets, viewMode]);
 
+    useEffect(() => {
+        if (timelineData.length > 0 && !hasInitialized.current) {
+            setActiveId(timelineData[0].id);
+            hasInitialized.current = true;
+        }
+    }, [timelineData]);
+
     const handleScroll = (event: any) => {
         const x = event.nativeEvent.contentOffset.x;
         const itemWidth = 240;
@@ -108,12 +118,16 @@ export function MobileCinematicTimeline({ buckets, onBucketPress }: MobileCinema
     return (
         <View style={styles.container}>
             {/* HUD Controls */}
-            <View style={styles.hudContainer}>
+            <View style={[styles.hudContainer, { paddingTop: insets.top + 60 }]}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {categories.map(cat => (
                         <TouchableOpacity
                             key={cat}
-                            onPress={() => setSelectedCategory(cat)}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setSelectedCategory(cat);
+                                scrollRef.current?.scrollTo({ x: 0, animated: true });
+                            }}
                             style={[
                                 styles.categoryButton,
                                 selectedCategory === cat ? styles.categoryButtonActive : styles.categoryButtonInactive
@@ -125,6 +139,7 @@ export function MobileCinematicTimeline({ buckets, onBucketPress }: MobileCinema
                             ]}>{cat}</Text>
                         </TouchableOpacity>
                     ))}
+
                 </ScrollView>
             </View>
 
@@ -138,47 +153,64 @@ export function MobileCinematicTimeline({ buckets, onBucketPress }: MobileCinema
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH / 2 - 120 }}
                 style={styles.timelineScroll}
+                snapToInterval={240}
+                snapToAlignment="start" // Start of the interval (which is centered because of padding)
+                decelerationRate="fast"
             >
                 {timelineData.map((node, index) => {
                     const isActive = activeId === node.id;
                     return (
                         <View key={node.id} style={styles.nodeContainer}>
-                            <MotiView
-                                from={{ opacity: 0, scale: 0.8 }}
-                                animate={{
-                                    opacity: isActive ? 1 : 0.4,
-                                    scale: isActive ? 1 : 0.9,
+                            <TouchableOpacity 
+                                activeOpacity={0.8}
+                                onPress={() => {
+                                    if (isActive && node.bucket?.id && onBucketPress) {
+                                        onBucketPress(node.bucket.id);
+                                    } else {
+                                        // If not active, clicking jumps to it
+                                        setActiveId(node.id);
+                                        scrollRef.current?.scrollTo({ x: index * 240, animated: true });
+                                    }
                                 }}
-                                transition={{ type: 'spring', damping: 15 }}
-                                style={styles.nodeContent}
                             >
-                                <Text style={[styles.nodeLabel, isActive && styles.nodeLabelActive]}>
-                                    {node.label}
-                                </Text>
+                                <MotiView
+                                    from={{ opacity: 0, scale: 0.8 }}
+                                    animate={{
+                                        opacity: isActive ? 1 : 0.4,
+                                        scale: isActive ? 1 : 0.9,
+                                    }}
+                                    transition={{ type: 'spring', damping: 15 }}
+                                    style={styles.nodeContent}
+                                >
+                                    <Text style={[styles.nodeLabel, isActive && styles.nodeLabelActive]}>
+                                        {node.label}
+                                    </Text>
 
-                                <View style={[styles.nodeDot, isActive ? styles.nodeDotActive : styles.nodeDotInactive]} />
+                                    <View style={[styles.nodeDot, isActive ? styles.nodeDotActive : styles.nodeDotInactive]} />
 
-                                {isActive && (
-                                    <MotiView
-                                        from={{ opacity: 0, translateY: 20 }}
-                                        animate={{ opacity: 1, translateY: 0 }}
-                                        style={styles.activeDetails}
-                                    >
-                                        {node.bucket?.thumbnail_url && tier !== 'LOW' && (
-                                            <Image
-                                                source={{ uri: node.bucket.thumbnail_url }}
-                                                style={styles.nodeImage}
-                                            />
-                                        )}
-                                        <Text style={styles.nodeTitle}>{node.bucket?.title}</Text>
-                                        <Text style={styles.nodeCategory}>{node.bucket?.category}</Text>
-                                    </MotiView>
-                                )}
-                            </MotiView>
+                                    {isActive && (
+                                        <MotiView
+                                            from={{ opacity: 0, translateY: 20 }}
+                                            animate={{ opacity: 1, translateY: 0 }}
+                                            style={styles.activeDetails}
+                                        >
+                                            {node.bucket?.thumbnail_url && tier !== 'LOW' && (
+                                                <Image
+                                                    source={{ uri: node.bucket.thumbnail_url }}
+                                                    style={styles.nodeImage}
+                                                />
+                                            )}
+                                            <Text style={styles.nodeTitle}>{node.bucket?.title}</Text>
+                                            <Text style={styles.nodeCategory}>{node.bucket?.category}</Text>
+                                        </MotiView>
+                                    )}
+                                </MotiView>
+                            </TouchableOpacity>
                         </View>
                     );
                 })}
             </ScrollView>
+
         </View>
     );
 }
