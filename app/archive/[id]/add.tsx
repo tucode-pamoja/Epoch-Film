@@ -42,20 +42,35 @@ export default function AddMemoryScreen() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('No user');
 
-            // 1. Upload Image (Simplified for demo, usually needs bucket upload logic)
-            // For now we'll just use the local URI or assume it's uploaded
-            const filename = `${user.id}/${Date.now()}.jpg`;
-            
-            // Note: In real app, we need to upload to Supabase Storage here.
-            // For now, let's just save the record to DB.
-            
+            // 1. Upload Image to Supabase Storage
+            const fileExt = image.split('.').pop();
+            const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+            const filePath = `memories/${fileName}`;
+
+            // Fetch image blob
+            const response = await fetch(image);
+            const blob = await response.blob();
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('epoch-assets') // Assuming this bucket exists
+                .upload(filePath, blob, {
+                    contentType: 'image/jpeg'
+                });
+
+            if (uploadError) throw uploadError;
+
+            // Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('epoch-assets')
+                .getPublicUrl(filePath);
+
             const { error } = await supabase
                 .from('memories')
                 .insert({
                     bucket_id: id,
                     user_id: user.id,
                     caption,
-                    media_url: image, // In production, this would be the storage public URL
+                    media_url: publicUrl,
                 });
 
             if (error) throw error;
