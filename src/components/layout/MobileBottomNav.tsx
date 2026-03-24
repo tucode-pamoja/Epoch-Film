@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { Film, Telescope, User } from 'lucide-react-native';
+import { Film, Telescope, User, LayoutGrid } from 'lucide-react-native';
 import { MotiView } from 'moti';
 
 export function MobileBottomNav() {
@@ -9,6 +9,7 @@ export function MobileBottomNav() {
     const pathname = usePathname();
 
     const navItems = [
+        { label: 'HOME', href: '/home', icon: LayoutGrid, id: 'home' },
         { label: 'ARCHIVE', href: '/archive', icon: Film, id: 'archive' },
         { label: 'EXPLORE', href: '/explore', icon: Telescope, id: 'explore' },
         { label: 'DIRECTOR', href: '/profile', icon: User, id: 'profile' },

@@ -34,5 +34,5 @@ export default function Index() {
         return <Redirect href="/login" />;
     }
 
-    return <Redirect href="/archive" />;
+    return <Redirect href="/home" />;
 }

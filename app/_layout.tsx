@@ -114,11 +114,13 @@ export default function RootLayout() {
                         }}
                     >
                         <Stack.Screen name="login" options={{ title: 'AUTHENTICATION', headerShown: false }} />
+                        <Stack.Screen name="home/index" options={{ title: 'HOME', headerShown: false }} />
                         <Stack.Screen name="archive/index" options={{ title: 'ARCHIVE', headerShown: false }} />
-                        <Stack.Screen name="archive/[id]/index" options={{ title: 'SCENE', headerShown: true }} />
-                        <Stack.Screen name="archive/[id]/add" options={{ title: 'NEW', presentation: 'modal' }} />
-                        <Stack.Screen name="profile/index" options={{ title: 'DIRECTOR', headerShown: false }} />
-                        <Stack.Screen name="explore/index" options={{ title: 'EXPLORE', headerShown: false }} />
+                        <Stack.Screen name="archive/[id]/index" options={{ headerShown: false }} />
+                        <Stack.Screen name="archive/[id]/add" options={{ presentation: 'modal', headerShown: false }} />
+                        <Stack.Screen name="profile/index" options={{ headerShown: false }} />
+                        <Stack.Screen name="explore/index" options={{ headerShown: false }} />
+                        <Stack.Screen name="director/[id]" options={{ headerShown: false }} />
                     </Stack>
                     {session && <MobileBottomNav />}
                 </View>

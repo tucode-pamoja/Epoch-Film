@@ -16,6 +16,7 @@ interface MobileSceneCardProps {
     onTicketPress?: () => void;
     onFollowPress?: () => void;
     onRemakePress?: () => void;
+    onDirectorPress?: () => void;
     isFollowing?: boolean;
     isLiked?: boolean;
 }
@@ -27,6 +28,7 @@ export default function MobileSceneCard({
     onTicketPress,
     onFollowPress,
     onRemakePress,
+    onDirectorPress,
     isFollowing,
     isLiked
 }: MobileSceneCardProps) {
@@ -68,7 +70,11 @@ export default function MobileSceneCard({
             <View style={[styles.content, { paddingTop: insets.top + 160, paddingBottom: 110 }]}>
                 {/* 2.1 Header: Director Info */}
                 <View style={styles.header}>
-                    <TouchableOpacity style={styles.directorInfo} activeOpacity={0.7}>
+                    <TouchableOpacity 
+                        style={styles.directorInfo} 
+                        activeOpacity={0.7}
+                        onPress={onDirectorPress}
+                    >
                         <View style={styles.avatarBorder}>
                             {bucket.users?.profile_image_url ? (
                                 <Image source={{ uri: bucket.users.profile_image_url }} style={styles.avatar} />
