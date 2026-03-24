@@ -1,82 +1,96 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { User, Film, Award, Ticket, LogOut, Grid, Square, List } from 'lucide-react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { supabase } from '@/utils/supabase/mobile';
-import { Profile, UserStats, Bucket, Memory } from '@/types';
+import { Profile, Bucket, Memory } from '@/types';
+import { User, Film, Award, ChevronLeft, Grid, Globe } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { followDirectorService, unfollowDirectorService, checkFollowingStatus } from '@/services/SocialService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COLUMN_WIDTH = SCREEN_WIDTH / 3;
 
-export default function ProfileScreen() {
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [stats, setStats] = useState<UserStats | null>(null);
-    const [memories, setMemories] = useState<Memory[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function DirectorProfileScreen() {
+    const { id } = useLocalSearchParams();
     const router = useRouter();
+    const [profile, setProfile] = useState<any>(null);
+    const [memories, setMemories] = useState<Memory[]>([]);
+    const [buckets, setBuckets] = useState<Bucket[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
 
     useEffect(() => {
-        fetchProfileData();
-    }, []);
+        fetchDirectorData();
+    }, [id]);
 
-    const fetchProfileData = async () => {
+    const fetchDirectorData = async () => {
         try {
             setLoading(true);
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.replace('/login');
-                return;
-            }
+            setCurrentUser(user);
 
-            // 1. Fetch User (Profile)
-            const { data: userData } = await supabase
+            // 1. Fetch User (Member)
+            const { data: userData, error: profileError } = await supabase
                 .from('users')
                 .select('*')
-                .eq('id', user.id)
+                .eq('id', id)
                 .single();
+            
+            if (profileError) throw profileError;
+            setProfile(userData);
 
-            if (userData) {
-                setProfile(userData);
-                setStats({
-                    level: userData.level || 1,
-                    xp: userData.xp || 0,
-                    nextLevelXp: 1000,
-                    streak: 5,
-                    completedDreams: 0,
-                    activeDreams: 0,
-                    followerCount: 0,
-                    followingCount: 0
-                });
-            }
-
-            // 2. Fetch Memories (Instagram style)
+            // 2. Fetch Public Memories (Grid)
             const { data: memoryData } = await supabase
                 .from('memories')
                 .select('*')
-                .eq('user_id', user.id)
+                .eq('user_id', id)
                 .order('created_at', { ascending: false });
             
             setMemories(memoryData || []);
 
-            // 3. Count Stats
-            const { count: bucketCount } = await supabase
+            // 3. Fetch Public Buckets
+            const { data: bucketData } = await supabase
                 .from('buckets')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', user.id);
+                .select('*')
+                .eq('user_id', id)
+                .eq('is_public', true)
+                .order('created_at', { ascending: false });
             
-            if (stats) setStats(prev => prev ? { ...prev, completedDreams: bucketCount || 0 } : null);
+            setBuckets(bucketData || []);
+
+            // 4. Check Following Status
+            if (user) {
+                const following = await checkFollowingStatus(supabase, user.id, id as string);
+                setIsFollowing(following);
+            }
 
         } catch (error) {
-            console.error('Error fetching profile data:', error);
+            console.error('Error fetching director data:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSignOut = async () => {
-        await supabase.auth.signOut();
-        router.replace('/login');
+    const handleFollow = async () => {
+        if (!currentUser) {
+            router.push('/login');
+            return;
+        }
+
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (isFollowing) {
+                await unfollowDirectorService(supabase, currentUser.id, id as string);
+                setIsFollowing(false);
+            } else {
+                await followDirectorService(supabase, currentUser.id, id as string);
+                setIsFollowing(true);
+            }
+        } catch (error) {
+            console.error('Follow error:', error);
+        }
     };
 
     if (loading) {
@@ -89,26 +103,26 @@ export default function ProfileScreen() {
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-            <Stack.Screen options={{ 
-                headerShown: false
+            <Stack.Screen options={{
+                headerShown: true,
+                headerTransparent: true,
+                title: '',
+                headerLeft: () => (
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <ChevronLeft color="#F7F2E9" size={28} />
+                    </TouchableOpacity>
+                )
             }} />
 
-            {/* Header: User Info */}
+            {/* Profile Header */}
             <View style={styles.header}>
-                <View style={styles.topRow}>
-                    <Text style={styles.title}>DIRECTOR'S OFFICE</Text>
-                    <TouchableOpacity onPress={handleSignOut}>
-                        <LogOut color="#5C5552" size={20} />
-                    </TouchableOpacity>
-                </View>
-
                 <View style={styles.profileRow}>
                     <View style={styles.avatarContainer}>
                         {profile?.profile_image_url ? (
                             <Image source={{ uri: profile.profile_image_url }} style={styles.avatar} />
                         ) : (
                             <View style={styles.avatarPlaceholder}>
-                                <User size={32} color="#C9A227" />
+                                <User size={40} color="#C9A227" />
                             </View>
                         )}
                         <View style={styles.levelBadge}>
@@ -122,40 +136,39 @@ export default function ProfileScreen() {
                             <Text style={styles.statLabel}>SCENES</Text>
                         </View>
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{stats?.completedDreams || 0}</Text>
+                            <Text style={styles.statValue}>{buckets.length}</Text>
                             <Text style={styles.statLabel}>FILMS</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{profile?.daily_tickets || 0}</Text>
-                            <Text style={styles.statLabel}>TICKETS</Text>
                         </View>
                     </View>
                 </View>
 
                 <View style={styles.infoSection}>
                     <Text style={styles.nickname}>{profile?.nickname || 'Unknown Director'}</Text>
-                    <Text style={styles.introduction}>{profile?.introduction || '인생이라는 영화를 제작 중입니다.'}</Text>
+                    <Text style={styles.bio}>{profile?.introduction || '인생이라는 영화를 제작 중인 감독입니다.'}</Text>
                 </View>
 
-                <TouchableOpacity style={styles.editBtn}>
-                    <Text style={styles.editBtnText}>EDIT PROFILE</Text>
-                </TouchableOpacity>
+                {currentUser?.id !== id && (
+                    <TouchableOpacity 
+                        style={[styles.followBtn, isFollowing && styles.followingBtn]}
+                        onPress={handleFollow}
+                    >
+                        <Text style={[styles.followBtnText, isFollowing && styles.followingBtnText]}>
+                            {isFollowing ? 'FOLLOWING' : 'FOLLOW DIRECTOR'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
-            {/* Interaction Tabs */}
+            {/* Instagram Style Grid */}
             <View style={styles.tabs}>
-                <TouchableOpacity style={[styles.tab, styles.activeTab]}>
+                <View style={[styles.tab, styles.activeTab]}>
                     <Grid color="#C9A227" size={20} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.tab}>
-                    <Film color="#5C5552" size={20} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.tab}>
-                    <Award color="#5C5552" size={20} />
-                </TouchableOpacity>
+                </View>
+                <View style={styles.tab}>
+                    <Globe color="#5C5552" size={20} />
+                </View>
             </View>
 
-            {/* Instagram Grid */}
             <View style={styles.grid}>
                 {memories.length === 0 ? (
                     <View style={styles.emptyContainer}>
@@ -163,7 +176,7 @@ export default function ProfileScreen() {
                         <Text style={styles.emptyText}>아직 기록된 장면이 없습니다.</Text>
                     </View>
                 ) : (
-                    memories.map((memory, index) => (
+                    memories.map((memory) => (
                         <TouchableOpacity 
                             key={memory.id} 
                             style={styles.gridItem}
@@ -190,7 +203,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#000',
     },
     scrollContent: {
-        paddingBottom: 120,
+        paddingBottom: 60,
     },
     loadingContainer: {
         flex: 1,
@@ -198,22 +211,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    header: {
-        paddingTop: 60,
-        paddingHorizontal: 20,
-        paddingBottom: 20,
-    },
-    topRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 32,
+        marginLeft: 8,
+        marginTop: 40,
     },
-    title: {
-        color: '#F7F2E9',
-        fontFamily: 'JetBrains Mono',
-        fontSize: 12,
-        letterSpacing: 4,
+    header: {
+        paddingTop: 120,
+        paddingHorizontal: 20,
+        paddingBottom: 24,
     },
     profileRow: {
         flexDirection: 'row',
@@ -279,7 +290,7 @@ const styles = StyleSheet.create({
         color: '#5C5552',
         fontFamily: 'JetBrains Mono',
         fontSize: 8,
-        letterSpacing: 1,
+        letterSpacing: 2,
         marginTop: 4,
     },
     infoSection: {
@@ -288,28 +299,36 @@ const styles = StyleSheet.create({
     nickname: {
         color: '#F7F2E9',
         fontFamily: 'Gowun Batang',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,
     },
-    introduction: {
+    bio: {
         color: '#F7F2E9CC',
         fontFamily: 'Pretendard',
         fontSize: 13,
         lineHeight: 18,
     },
-    editBtn: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
+    followBtn: {
+        backgroundColor: '#C9A227',
         height: 36,
         borderRadius: 4,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    editBtnText: {
-        color: '#F7F2E9',
+    followingBtn: {
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        borderColor: '#C9A227',
+    },
+    followBtnText: {
+        color: '#000',
         fontFamily: 'JetBrains Mono',
         fontSize: 10,
-        letterSpacing: 1,
+        fontWeight: 'bold',
+    },
+    followingBtnText: {
+        color: '#C9A227',
     },
     tabs: {
         flexDirection: 'row',

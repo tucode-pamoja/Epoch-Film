@@ -177,6 +177,7 @@ export default function ExploreScreen() {
                     ]
                 );
             } : undefined}
+            onDirectorPress={() => router.push(`/director/${item.user_id}`)}
             isLiked={likedMap[item.id]}
             isFollowing={followingMap[item.user_id]}
         />
